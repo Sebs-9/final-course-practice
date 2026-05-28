@@ -1,0 +1,39 @@
+@startuml
+left to right direction
+actor "管理员" as Admin
+actor "家庭成员" as Member
+actor "访客查看者" as Guest
+actor "智能设备/传感器" as Device
+
+rectangle "全屋智能安防与语音控制系统" {
+  usecase "登录系统" as UC01
+  usecase "查看实时监控" as UC02
+  usecase "控制智能设备" as UC03
+  usecase "触发/接收异常告警" as UC04
+  usecase "处理告警" as UC05
+  usecase "检索录像回放" as UC06
+  usecase "执行语音指令" as UC07
+  usecase "切换场景模式" as UC08
+  usecase "维护用户/设备/规则" as UC09
+  usecase "查看审计日志" as UC10
+}
+
+Guest --> UC01
+Guest --> UC02
+Guest --> UC06
+Member --> UC01
+Member --> UC02
+Member --> UC03
+Member --> UC05
+Member --> UC06
+Member --> UC07
+Member --> UC08
+Admin --> UC09
+Admin --> UC10
+Admin --> UC03
+Admin --> UC05
+Device --> UC04
+UC04 --> UC05 : <<include>>
+UC07 --> UC03 : <<include>>
+UC08 --> UC03 : <<include>>
+@enduml

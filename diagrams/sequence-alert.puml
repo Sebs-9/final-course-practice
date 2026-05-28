@@ -1,0 +1,19 @@
+@startuml
+actor "家庭成员" as User
+participant "前端看板" as UI
+participant "HTTP API" as API
+participant "告警与联动服务" as AlertService
+participant "设备服务" as DeviceService
+database "SQLite" as DB
+
+User -> UI : 点击“触发模拟告警”
+UI -> API : POST /api/alerts/simulate
+API -> AlertService : simulate_alert(event_type, room_id)
+AlertService -> DB : 写入 alerts
+AlertService -> DB : 写入 recordings
+AlertService -> DeviceService : 执行联动策略
+DeviceService -> DB : 更新警报器/灯光/摄像头状态
+AlertService -> DB : 写入 operation_logs
+API --> UI : 返回告警详情
+UI --> User : 展示告警、录像和设备联动结果
+@enduml

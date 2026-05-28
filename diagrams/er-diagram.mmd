@@ -1,0 +1,79 @@
+erDiagram
+  USERS ||--o{ OPERATION_LOGS : writes
+  ROOMS ||--o{ DEVICES : contains
+  ROOMS ||--o{ ALERTS : raises
+  ROOMS ||--o{ RECORDINGS : owns
+  DEVICES ||--o{ ALERTS : triggers
+  DEVICES ||--o{ RECORDINGS : records
+  SCENES ||--o{ SCENE_ACTIONS : includes
+  DEVICES ||--o{ SCENE_ACTIONS : changes
+
+  USERS {
+    int id PK
+    string username UK
+    string password_hash
+    string role
+    string display_name
+    string created_at
+  }
+  ROOMS {
+    int id PK
+    string name UK
+    string floor
+    string description
+  }
+  DEVICES {
+    int id PK
+    int room_id FK
+    string name
+    string type
+    string status
+    int battery
+    int online
+    string metadata_json
+    string updated_at
+  }
+  ALERTS {
+    int id PK
+    int room_id FK
+    int device_id FK
+    string event_type
+    string severity
+    string status
+    string message
+    string triggered_at
+    string resolved_at
+    string resolution_note
+  }
+  RECORDINGS {
+    int id PK
+    int room_id FK
+    int camera_device_id FK
+    string title
+    string event_type
+    string started_at
+    int duration_seconds
+    string storage_path
+    string summary
+  }
+  SCENES {
+    int id PK
+    string name UK
+    string description
+    int is_active
+  }
+  SCENE_ACTIONS {
+    int id PK
+    int scene_id FK
+    int device_id FK
+    string target_status
+  }
+  OPERATION_LOGS {
+    int id PK
+    int user_id FK
+    string action
+    string target_type
+    int target_id
+    string detail
+    string created_at
+  }

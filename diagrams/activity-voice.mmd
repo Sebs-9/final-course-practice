@@ -1,0 +1,18 @@
+flowchart TD
+  Start([开始]) --> Input["用户输入语音指令文本"]
+  Input --> Trim["清洗指令并提取关键词"]
+  Trim --> Scene{"是否命中场景模式"}
+  Scene -- 是 --> ActivateScene["启动场景并批量更新设备"]
+  Scene -- 否 --> Alert{"是否命中告警模拟"}
+  Alert -- 是 --> SimAlert["生成告警、录像和联动响应"]
+  Alert -- 否 --> Camera{"是否为查看摄像头"}
+  Camera -- 是 --> QueryCamera["返回摄像头视图"]
+  Camera -- 否 --> Device{"是否命中设备控制"}
+  Device -- 是 --> UpdateDevice["更新设备状态"]
+  Device -- 否 --> Fail["返回无法识别提示"]
+  ActivateScene --> Log["写入审计日志"]
+  SimAlert --> Log
+  QueryCamera --> Log
+  UpdateDevice --> Log
+  Log --> End([结束])
+  Fail --> End

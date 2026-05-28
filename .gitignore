@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/smart_home.sqlite
+assets/chrome-capture-profile/
+
+/*.pdf

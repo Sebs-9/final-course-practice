@@ -1,0 +1,6 @@
+stateDiagram-v2
+  [*] --> open: 传感器/视频分析触发
+  open --> acknowledged: 用户查看并确认
+  open --> resolved: 直接处置
+  acknowledged --> resolved: 填写处置结果
+  resolved --> [*]

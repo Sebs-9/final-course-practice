@@ -1,0 +1,31 @@
+flowchart TB
+  Browser["表现层\nHTML/CSS/JavaScript 单页应用"]
+  API["接口层\nHTTP JSON API"]
+  Auth["认证与权限模块"]
+  Device["设备管理模块"]
+  Monitor["监控与录像模块"]
+  Alert["告警与联动模块"]
+  Voice["语音指令解析模块"]
+  Scene["场景模式模块"]
+  Log["审计日志模块"]
+  DAL["数据访问层\nSQLite Repository"]
+  DB[("数据存储层\nsmart_home.sqlite")]
+
+  Browser --> API
+  API --> Auth
+  API --> Device
+  API --> Monitor
+  API --> Alert
+  API --> Voice
+  API --> Scene
+  API --> Log
+  Auth --> DAL
+  Device --> DAL
+  Monitor --> DAL
+  Alert --> DAL
+  Voice --> Device
+  Voice --> Alert
+  Voice --> Scene
+  Scene --> Device
+  Log --> DAL
+  DAL --> DB
