@@ -3,6 +3,7 @@ const state = {
   dashboard: null,
   message: "",
   error: "",
+  activeSection: "overview",
 };
 
 const app = document.querySelector("#app");
@@ -27,6 +28,17 @@ async function api(path, options = {}) {
 function setMessage(message, isError = false) {
   state.message = isError ? "" : message;
   state.error = isError ? message : "";
+}
+
+function navigationItems(user) {
+  const items = [
+    ["overview", "监控总览"],
+    ["devices", "设备控制"],
+    ["alerts", "告警中心"],
+    ["recordings", "录像回放"],
+  ];
+  if (user.role === "admin") items.push(["logs", "系统日志"]);
+  return items;
 }
 
 async function loadDashboard() {
@@ -102,11 +114,9 @@ function renderApp() {
           <span>Smart Home Console</span>
         </div>
         <nav class="nav-list">
-          <button class="nav-item active">监控总览</button>
-          <button class="nav-item">设备控制</button>
-          <button class="nav-item">告警中心</button>
-          <button class="nav-item">录像回放</button>
-          <button class="nav-item">系统日志</button>
+          ${navigationItems(user).map(([id, label]) => `
+            <button class="nav-item ${state.activeSection === id ? "active" : ""}" data-section="${id}" type="button">${label}</button>
+          `).join("")}
         </nav>
         <div class="user-box">
           <strong>${escapeHtml(user.display_name)}</strong>
@@ -115,7 +125,7 @@ function renderApp() {
         </div>
       </aside>
       <main class="main">
-        <section class="topbar">
+        <section class="topbar" id="section-overview">
           <div>
             <div class="eyebrow">实时运行态势</div>
             <h1>家庭安全与设备联动工作台</h1>
@@ -128,13 +138,13 @@ function renderApp() {
         ${renderKpis(data.stats)}
         <section class="grid two-col">
           ${renderCameras(data.devices)}
-          ${renderVoiceAndScenes(data)}
+          ${renderVoiceAndScenes(data, user)}
         </section>
         <section class="grid two-col">
-          ${renderAlerts(data)}
+          ${renderAlerts(data, user)}
           ${renderRecordings(data)}
         </section>
-        ${renderDevices(data)}
+        ${renderDevices(data, user)}
         ${user.role === "admin" ? renderLogs(data.logs) : ""}
       </main>
     </div>
@@ -184,19 +194,20 @@ function renderCameras(devices) {
   `;
 }
 
-function renderVoiceAndScenes(data) {
+function renderVoiceAndScenes(data, user) {
+  const canOperate = user.role !== "guest";
   return `
     <section class="panel">
       <div class="panel-head">
         <h2>语音与场景</h2>
         <span class="tag info">NLP 模拟</span>
       </div>
-      <form id="voice-form" class="voice-row">
+      ${canOperate ? `<form id="voice-form" class="voice-row">
         <label>语音指令
           <input name="command" placeholder="例如：打开客厅灯 / 启动离家安防 / 模拟厨房烟雾" />
         </label>
         <button class="primary" type="submit">执行</button>
-      </form>
+      </form>` : ""}
       <div class="grid scenes" style="margin-top: 14px;">
         ${data.scenes.map((scene) => `
           <article class="scene-card ${scene.is_active ? "active" : ""}">
@@ -205,7 +216,7 @@ function renderVoiceAndScenes(data) {
               ${scene.is_active ? `<span class="tag ok">当前</span>` : `<span class="tag">待用</span>`}
             </div>
             <p class="muted">${escapeHtml(scene.description)}</p>
-            <button class="secondary" data-scene="${scene.id}">启动场景</button>
+            ${canOperate ? `<button class="secondary" data-scene="${scene.id}">启动场景</button>` : ""}
           </article>
         `).join("")}
       </div>
@@ -213,14 +224,15 @@ function renderVoiceAndScenes(data) {
   `;
 }
 
-function renderAlerts(data) {
+function renderAlerts(data, user) {
+  const canOperate = user.role !== "guest";
   return `
-    <section class="panel">
+    <section class="panel" id="section-alerts">
       <div class="panel-head">
         <h2>告警中心</h2>
         <span class="tag ${data.alerts.length ? "bad" : "ok"}">${data.alerts.length ? "需处理" : "正常"}</span>
       </div>
-      <form id="simulate-form" class="simulate-row">
+      ${canOperate ? `<form id="simulate-form" class="simulate-row">
         <label>房间
           <select name="room_id">
             ${data.rooms.map((room) => `<option value="${room.id}">${escapeHtml(room.name)}</option>`).join("")}
@@ -236,7 +248,7 @@ function renderAlerts(data) {
           </select>
         </label>
         <button class="danger" type="submit">触发模拟告警</button>
-      </form>
+      </form>` : ""}
       <div class="list" style="margin-top: 14px;">
         ${data.alerts.length ? data.alerts.map((alert) => `
           <article class="alert-item ${escapeHtml(alert.severity)}">
@@ -245,9 +257,9 @@ function renderAlerts(data) {
               <span class="tag bad">${escapeHtml(alert.severity)}</span>
             </div>
             <div class="muted">${escapeHtml(alert.room_name)} · ${escapeHtml(alert.triggered_at)}</div>
-            <div class="controls">
+            ${canOperate ? `<div class="controls">
               <button class="secondary" data-resolve="${alert.id}">确认处理</button>
-            </div>
+            </div>` : ""}
           </article>
         `).join("") : `<p class="muted">暂无未处理告警。</p>`}
       </div>
@@ -257,7 +269,7 @@ function renderAlerts(data) {
 
 function renderRecordings(data) {
   return `
-    <section class="panel">
+    <section class="panel" id="section-recordings">
       <div class="panel-head">
         <h2>录像回放</h2>
         <span class="tag info">事件索引</span>
@@ -288,9 +300,10 @@ function recordingItems(recordings) {
   `).join("") || `<p class="muted">没有匹配的录像。</p>`;
 }
 
-function renderDevices(data) {
+function renderDevices(data, user) {
+  const canOperate = user.role !== "guest";
   return `
-    <section class="panel">
+    <section class="panel" id="section-devices">
       <div class="panel-head">
         <h2>设备控制</h2>
         <span class="tag ok">${data.stats.onlineCount}/${data.stats.deviceCount} 在线</span>
@@ -304,7 +317,7 @@ function renderDevices(data) {
             </div>
             <div class="muted">${escapeHtml(device.room_name)} · ${escapeHtml(device.type)} · 电量 ${device.battery}%</div>
             <div>当前状态：<strong>${escapeHtml(device.status)}</strong></div>
-            ${deviceControl(device)}
+            ${canOperate ? deviceControl(device) : ""}
           </article>
         `).join("")}
       </div>
@@ -328,7 +341,7 @@ function deviceControl(device) {
 
 function renderLogs(logs) {
   return `
-    <section class="panel">
+    <section class="panel" id="section-logs">
       <div class="panel-head">
         <h2>审计日志</h2>
         <span class="tag">管理员可见</span>
@@ -347,10 +360,24 @@ function renderLogs(logs) {
 }
 
 function bindActions() {
+  document.querySelectorAll("[data-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const sectionId = button.dataset.section;
+      const target = document.querySelector(`#section-${sectionId}`);
+      if (!target) return;
+      state.activeSection = sectionId;
+      document.querySelectorAll("[data-section]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
   document.querySelector("#logout").addEventListener("click", () => {
     localStorage.removeItem("smart-home-token");
     state.token = "";
     state.dashboard = null;
+    state.activeSection = "overview";
     renderLogin();
   });
 
@@ -399,7 +426,7 @@ function bindActions() {
     });
   });
 
-  document.querySelector("#simulate-form").addEventListener("submit", async (event) => {
+  document.querySelector("#simulate-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     try {
@@ -418,7 +445,7 @@ function bindActions() {
     }
   });
 
-  document.querySelector("#voice-form").addEventListener("submit", async (event) => {
+  document.querySelector("#voice-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     try {
