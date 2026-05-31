@@ -33,6 +33,7 @@ function setMessage(message, isError = false) {
 function navigationItems(user) {
   const items = [
     ["overview", "监控总览"],
+    ["home-demo", "房屋态势"],
     ["devices", "设备控制"],
     ["alerts", "告警中心"],
     ["recordings", "录像回放"],
@@ -136,6 +137,7 @@ function renderApp() {
         ${state.error ? `<div class="error">${escapeHtml(state.error)}</div>` : ""}
         ${state.message ? `<div class="success">${escapeHtml(state.message)}</div>` : ""}
         ${renderKpis(data.stats)}
+        ${renderHomeVisual(data, user)}
         <section class="grid two-col">
           ${renderCameras(data.devices)}
           ${renderVoiceAndScenes(data, user)}
@@ -166,6 +168,152 @@ function renderKpis(stats) {
       <div class="value">${value}</div>
     </div>
   `).join("")}</section>`;
+}
+
+function roomVisualClass(roomName) {
+  return {
+    "客厅": "living",
+    "卧室": "bedroom",
+    "主卧": "bedroom",
+    "厨房": "kitchen",
+    "玄关": "entry",
+    "阳台": "balcony",
+  }[roomName] || "room";
+}
+
+function isDeviceActive(device) {
+  return ["online", "active", "on", "locked", "armed", "cooling"].includes(device.status);
+}
+
+function roomSummary(roomDevices, alert) {
+  if (alert) return alert.message;
+  const activeDevices = roomDevices.filter(isDeviceActive).length;
+  return `${activeDevices}/${roomDevices.length} 个设备处于工作态`;
+}
+
+function livingRoomDevice(devices, type) {
+  return devices.find((device) => device.room_name === "客厅" && device.type === type);
+}
+
+function livingRoomControl(device, nextStatus, label, canOperate) {
+  if (!device) return "";
+  if (!canOperate) return `<span class="living-marker">${label}</span>`;
+  return `<button class="living-marker" data-device="${device.id}" data-status="${nextStatus}" type="button">${label}</button>`;
+}
+
+function renderLivingRoomScene(data, canOperate, alertsByRoom) {
+  const livingDevices = data.devices.filter((device) => device.room_name === "客厅");
+  const light = livingRoomDevice(data.devices, "light");
+  const camera = livingRoomDevice(data.devices, "camera");
+  const alarm = livingRoomDevice(data.devices, "alarm");
+  const livingAlert = alertsByRoom.get("客厅");
+  const lightOn = light?.status === "on";
+  const cameraOn = camera && camera.status !== "privacy" && camera.online;
+  const alarmActive = alarm?.status === "active";
+  const alerting = Boolean(livingAlert || alarmActive);
+
+  return `
+    <section class="living-showcase ${lightOn ? "lights-on" : "lights-off"} ${alerting ? "alert" : ""}">
+      <div class="living-info">
+        <div>
+          <div class="eyebrow">客厅实时画面</div>
+          <h3>客厅智能场景演示</h3>
+          <p class="muted">${livingAlert ? escapeHtml(livingAlert.message) : "点击画面中的设备标记或下方控制按钮，客厅画面会同步变化。"}</p>
+        </div>
+        <div class="tag-row">
+          <span class="tag ${lightOn ? "ok" : "info"}">灯光 ${light?.status || "unknown"}</span>
+          <span class="tag ${cameraOn ? "ok" : "warn"}">摄像头 ${camera?.status || "unknown"}</span>
+          <span class="tag ${alerting ? "bad" : "info"}">警报 ${alarm?.status || "standby"}</span>
+        </div>
+      </div>
+      <div class="living-room-picture">
+        <div class="living-window">
+          <span></span><span></span>
+        </div>
+        <div class="ceiling-light ${lightOn ? "on" : ""}"></div>
+        <div class="wall-camera ${cameraOn ? "active" : "privacy"}">
+          <span></span>
+        </div>
+        <div class="air-conditioner">
+          <span></span>
+        </div>
+        <div class="sofa">
+          <span class="sofa-back"></span>
+          <span class="sofa-seat"></span>
+          <span class="sofa-arm left"></span>
+          <span class="sofa-arm right"></span>
+        </div>
+        <div class="coffee-table"></div>
+        <div class="floor-rug"></div>
+        <div class="alert-beacon ${alerting ? "active" : ""}"></div>
+        <div class="living-controls">
+          ${livingRoomControl(light, lightOn ? "off" : "on", lightOn ? "关客厅灯" : "开客厅灯", canOperate)}
+          ${livingRoomControl(camera, cameraOn ? "privacy" : "active", cameraOn ? "隐私模式" : "开启摄像头", canOperate)}
+          ${livingRoomControl(alarm, alarmActive ? "standby" : "active", alarmActive ? "警报待命" : "启动警报", canOperate)}
+        </div>
+      </div>
+      <div class="living-device-strip">
+        ${livingDevices.map((device) => `
+          <span class="mini-device ${isDeviceActive(device) ? "online" : ""}">
+            ${escapeHtml(device.name)}：${escapeHtml(device.status)}
+          </span>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderHomeVisual(data, user) {
+  const alertsByRoom = new Map(data.alerts.map((alert) => [alert.room_name, alert]));
+  const canOperate = user.role !== "guest";
+
+  return `
+    <section class="panel home-demo" id="section-home-demo">
+      <div class="panel-head">
+        <div>
+          <h2>全屋智能联动演示</h2>
+          <p class="muted">实时设备态势与联动结果。</p>
+        </div>
+        <span class="tag info">可视化演示</span>
+      </div>
+      ${renderLivingRoomScene(data, canOperate, alertsByRoom)}
+      <div class="house-stage" aria-label="全屋智能房屋态势图">
+        ${data.rooms.map((room) => {
+          const roomDevices = data.devices.filter((device) => device.room_name === room.name);
+          const alert = alertsByRoom.get(room.name);
+          const lightOn = roomDevices.some((device) => device.type === "light" && device.status === "on");
+          const cameraOn = roomDevices.some((device) => device.type === "camera" && device.status !== "privacy" && device.online);
+          const lockClosed = roomDevices.some((device) => device.type === "lock" && device.status === "locked");
+          const sensorArmed = roomDevices.some((device) => device.type === "sensor" && device.status === "armed");
+          const alarmActive = roomDevices.some((device) => device.type === "alarm" && device.status === "active");
+          const roomState = alert || alarmActive ? "alert" : lightOn || cameraOn || sensorArmed ? "active" : "idle";
+
+          return `
+            <article class="room-tile ${roomVisualClass(room.name)} ${roomState}">
+              <div class="room-topline">
+                <strong>${escapeHtml(room.name)}</strong>
+                ${alert ? `<span class="tag bad">告警</span>` : `<span class="tag ${roomState === "active" ? "ok" : "info"}">${roomState === "active" ? "运行中" : "待机"}</span>`}
+              </div>
+              <div class="room-scene">
+                <span class="window ${cameraOn ? "online" : ""}"></span>
+                <span class="lamp ${lightOn ? "on" : ""}"></span>
+                <span class="sensor ${sensorArmed ? "armed" : ""} ${alert || alarmActive ? "warning" : ""}"></span>
+                ${lockClosed ? `<span class="door-lock locked"></span>` : `<span class="door-lock"></span>`}
+              </div>
+              <p class="room-note">${escapeHtml(roomSummary(roomDevices, alert))}</p>
+              <div class="room-devices">
+                ${roomDevices.map((device) => `
+                  <span class="mini-device ${isDeviceActive(device) ? "online" : ""}">
+                    ${escapeHtml(device.name)}：${escapeHtml(device.status)}
+                  </span>
+                `).join("")}
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
 }
 
 function renderCameras(devices) {
