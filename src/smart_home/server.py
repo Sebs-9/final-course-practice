@@ -131,6 +131,8 @@ def create_handler(service: SmartHomeService, auth: AuthService, static_dir: Pat
                 raise ApiError(404, "静态文件不存在。")
             data = target.read_bytes()
             content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+            if content_type.startswith("text/") or content_type in {"application/javascript", "application/json"}:
+                content_type = f"{content_type}; charset=utf-8"
             self.send_response(200)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
