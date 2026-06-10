@@ -163,6 +163,12 @@ textarea:focus {
 }
 
 .sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
   background: #19201f;
   color: #eef5f2;
   padding: 24px 18px;
@@ -965,6 +971,9 @@ button.living-marker:hover {
 
   .sidebar {
     position: static;
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   .kpis,
