@@ -4,9 +4,11 @@ const state = {
   message: "",
   error: "",
   activeSection: "overview",
+  pendingFocusSection: "",
 };
 
 const app = document.querySelector("#app");
+let scrollSyncHandler = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -30,13 +32,28 @@ function setMessage(message, isError = false) {
   state.error = isError ? message : "";
 }
 
+function focusHomeDemoAfterUpdate() {
+  state.activeSection = "home-demo";
+  state.pendingFocusSection = "home-demo";
+}
+
+function focusPendingSection() {
+  if (!state.pendingFocusSection) return;
+  const sectionId = state.pendingFocusSection;
+  state.pendingFocusSection = "";
+  requestAnimationFrame(() => {
+    const target = document.querySelector(`#section-${sectionId}`);
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 function navigationItems(user) {
   const items = [
     ["overview", "监控总览"],
-    ["home-demo", "房屋态势"],
-    ["devices", "设备控制"],
-    ["alerts", "告警中心"],
-    ["recordings", "录像回放"],
+    ["home-demo", "态势 / 控制"],
+    ["monitoring", "监控 / 回放"],
+    ["alerts", "告警处理"],
+    ["devices", "设备明细"],
   ];
   if (user.role === "admin") items.push(["logs", "系统日志"]);
   return items;
@@ -68,10 +85,10 @@ function renderLogin() {
             <input name="username" value="admin" autocomplete="username" />
           </label>
           <label>密码
-            <input name="password" type="password" value="admin123" autocomplete="current-password" />
+            <input name="password" type="password" value="Admin@SE2026!" autocomplete="current-password" />
           </label>
           <button class="primary" type="submit">登录系统</button>
-          <p class="muted">演示账号：admin/admin123，member/member123，guest/guest123</p>
+          <p class="muted">演示账号：admin/Admin@SE2026!，member/Member@SE2026!，guest/Guest@SE2026!</p>
           ${state.error ? `<div class="error">${escapeHtml(state.error)}</div>` : ""}
         </form>
       </section>
@@ -138,20 +155,18 @@ function renderApp() {
         ${state.message ? `<div class="success">${escapeHtml(state.message)}</div>` : ""}
         ${renderKpis(data.stats)}
         ${renderHomeVisual(data, user)}
-        <section class="grid two-col">
+        <section class="grid two-col" id="section-monitoring" aria-label="监控与回放">
           ${renderCameras(data.devices)}
-          ${renderVoiceAndScenes(data, user)}
-        </section>
-        <section class="grid two-col">
-          ${renderAlerts(data, user)}
           ${renderRecordings(data)}
         </section>
+        ${renderAlerts(data, user)}
         ${renderDevices(data, user)}
         ${user.role === "admin" ? renderLogs(data.logs) : ""}
       </main>
     </div>
   `;
   bindActions();
+  focusPendingSection();
 }
 
 function renderKpis(stats) {
@@ -191,75 +206,162 @@ function roomSummary(roomDevices, alert) {
   return `${activeDevices}/${roomDevices.length} 个设备处于工作态`;
 }
 
-function livingRoomDevice(devices, type) {
-  return devices.find((device) => device.room_name === "客厅" && device.type === type);
+function roomState(roomDevices, alert) {
+  const alarmActive = roomDevices.some((device) => device.type === "alarm" && device.status === "active");
+  if (alert || alarmActive) return "alert";
+  return roomDevices.some(isDeviceActive) ? "active" : "idle";
 }
 
-function livingRoomControl(device, nextStatus, label, canOperate) {
+function roomDeviceByType(roomDevices, type) {
+  return roomDevices.find((device) => device.type === type);
+}
+
+function roomStatusLabel(stateName) {
+  return {
+    active: "运行中",
+    alert: "告警",
+    idle: "待机",
+  }[stateName] || "正常";
+}
+
+function miniDeviceControl(device, nextStatus, label, canOperate, className = "") {
   if (!device) return "";
-  if (!canOperate) return `<span class="living-marker">${label}</span>`;
-  return `<button class="living-marker" data-device="${device.id}" data-status="${nextStatus}" type="button">${label}</button>`;
+  const classes = ["mini-action", className, isDeviceActive(device) ? "active" : ""]
+    .filter(Boolean)
+    .join(" ");
+  if (!canOperate) return `<span class="${classes}">${escapeHtml(label)}</span>`;
+  return `<button class="${classes}" data-device="${device.id}" data-status="${nextStatus}" type="button">${escapeHtml(label)}</button>`;
 }
 
-function renderLivingRoomScene(data, canOperate, alertsByRoom) {
-  const livingDevices = data.devices.filter((device) => device.room_name === "客厅");
-  const light = livingRoomDevice(data.devices, "light");
-  const camera = livingRoomDevice(data.devices, "camera");
-  const alarm = livingRoomDevice(data.devices, "alarm");
-  const livingAlert = alertsByRoom.get("客厅");
-  const lightOn = light?.status === "on";
-  const cameraOn = camera && camera.status !== "privacy" && camera.online;
-  const alarmActive = alarm?.status === "active";
-  const alerting = Boolean(livingAlert || alarmActive);
+function roomMiniVisual(roomClass, status) {
+  const camera = `<div class="mini-camera ${status.cameraOn ? "on" : ""}"><span></span></div>`;
+  const sensor = `<div class="mini-sensor ${status.sensorArmed ? "armed" : ""}"></div>`;
+
+  if (roomClass === "entry") {
+    return `
+      <div class="mini-door ${status.lockLocked ? "locked" : "unlocked"}"></div>
+      <div class="mini-mat"></div>
+      ${camera}
+      <div class="mini-lock ${status.lockLocked ? "locked" : "unlocked"}"></div>
+    `;
+  }
+
+  if (roomClass === "living") {
+    return `
+      <div class="mini-window"><span></span><span></span></div>
+      <div class="mini-lamp ${status.lightOn ? "on" : ""}"></div>
+      <div class="mini-sofa"><span></span></div>
+      <div class="mini-table"></div>
+      ${camera}
+      <div class="mini-alert ${status.alarmActive ? "on" : ""}"></div>
+    `;
+  }
+
+  if (roomClass === "bedroom") {
+    return `
+      <div class="mini-bed"><span></span></div>
+      <div class="mini-side-table"></div>
+      <div class="mini-ac ${status.climateOn ? "on" : ""}"><span></span></div>
+      ${camera}
+    `;
+  }
+
+  if (roomClass === "kitchen") {
+    return `
+      <div class="mini-counter"></div>
+      <div class="mini-cabinets"><span></span><span></span><span></span></div>
+      <div class="mini-stove"></div>
+      <div class="mini-smoke ${status.sensorArmed ? "armed" : ""}"></div>
+    `;
+  }
+
+  if (roomClass === "balcony") {
+    return `
+      <div class="mini-rail"></div>
+      <div class="mini-balcony-door"></div>
+      <div class="mini-plant"></div>
+      ${sensor}
+    `;
+  }
 
   return `
-    <section class="living-showcase ${lightOn ? "lights-on" : "lights-off"} ${alerting ? "alert" : ""}">
-      <div class="living-info">
+    <div class="mini-room-default"></div>
+    ${camera}
+    ${sensor}
+  `;
+}
+
+function renderRoomLiveScene(roomDevices, canOperate, roomClass) {
+  const light = roomDeviceByType(roomDevices, "light");
+  const camera = roomDeviceByType(roomDevices, "camera");
+  const alarm = roomDeviceByType(roomDevices, "alarm");
+  const lock = roomDeviceByType(roomDevices, "lock");
+  const climate = roomDeviceByType(roomDevices, "climate");
+  const sensor = roomDeviceByType(roomDevices, "sensor");
+  const status = {
+    lightOn: light?.status === "on",
+    cameraOn: Boolean(camera && camera.status !== "privacy" && camera.online),
+    alarmActive: alarm?.status === "active",
+    lockLocked: lock?.status === "locked",
+    climateOn: climate?.status === "cooling",
+    sensorArmed: sensor?.status === "armed",
+  };
+  const actions = [
+    miniDeviceControl(light, status.lightOn ? "off" : "on", status.lightOn ? "关灯" : "开灯", canOperate, "light"),
+    miniDeviceControl(camera, status.cameraOn ? "privacy" : "active", status.cameraOn ? "隐私" : "摄像", canOperate, "camera"),
+    miniDeviceControl(alarm, status.alarmActive ? "standby" : "active", status.alarmActive ? "待命" : "警报", canOperate, "alarm"),
+    miniDeviceControl(lock, status.lockLocked ? "unlocked" : "locked", status.lockLocked ? "解锁" : "上锁", canOperate, "lock"),
+    miniDeviceControl(climate, status.climateOn ? "off" : "cooling", status.climateOn ? "关空调" : "制冷", canOperate, "climate"),
+    miniDeviceControl(sensor, status.sensorArmed ? "normal" : "armed", status.sensorArmed ? "正常" : "布防", canOperate, "sensor"),
+  ].filter(Boolean).join("");
+
+  return `
+    <div class="room-live-scene ${roomClass} ${status.lightOn ? "light-on" : ""} ${status.alarmActive ? "alarm-on" : ""}">
+      ${roomMiniVisual(roomClass, status)}
+    </div>
+    <div class="room-actions">
+      ${actions || `<span class="mini-action">仅监测</span>`}
+    </div>
+  `;
+}
+
+function renderRoomOverview(data, alertsByRoom, canOperate) {
+  return `
+    <div class="room-overview" aria-label="全屋实时画面">
+      <div class="room-overview-head">
         <div>
-          <div class="eyebrow">客厅实时画面</div>
-          <h3>客厅智能场景演示</h3>
-          <p class="muted">${livingAlert ? escapeHtml(livingAlert.message) : "点击画面中的设备标记或下方控制按钮，客厅画面会同步变化。"}</p>
+          <h3>全屋实时画面</h3>
+          <p class="muted">每个房间都有对应的画面和控制按钮，点完就在本房间画面里看状态变化。</p>
         </div>
-        <div class="tag-row">
-          <span class="tag ${lightOn ? "ok" : "info"}">灯光 ${light?.status || "unknown"}</span>
-          <span class="tag ${cameraOn ? "ok" : "warn"}">摄像头 ${camera?.status || "unknown"}</span>
-          <span class="tag ${alerting ? "bad" : "info"}">警报 ${alarm?.status || "standby"}</span>
-        </div>
+        <span class="tag info">${data.rooms.length} 个房间</span>
       </div>
-      <div class="living-room-picture">
-        <div class="living-window">
-          <span></span><span></span>
-        </div>
-        <div class="ceiling-light ${lightOn ? "on" : ""}"></div>
-        <div class="wall-camera ${cameraOn ? "active" : "privacy"}">
-          <span></span>
-        </div>
-        <div class="air-conditioner">
-          <span></span>
-        </div>
-        <div class="sofa">
-          <span class="sofa-back"></span>
-          <span class="sofa-seat"></span>
-          <span class="sofa-arm left"></span>
-          <span class="sofa-arm right"></span>
-        </div>
-        <div class="coffee-table"></div>
-        <div class="floor-rug"></div>
-        <div class="alert-beacon ${alerting ? "active" : ""}"></div>
-        <div class="living-controls">
-          ${livingRoomControl(light, lightOn ? "off" : "on", lightOn ? "关客厅灯" : "开客厅灯", canOperate)}
-          ${livingRoomControl(camera, cameraOn ? "privacy" : "active", cameraOn ? "隐私模式" : "开启摄像头", canOperate)}
-          ${livingRoomControl(alarm, alarmActive ? "standby" : "active", alarmActive ? "警报待命" : "启动警报", canOperate)}
-        </div>
+      <div class="room-plan-grid">
+        ${data.rooms.map((room) => {
+          const roomDevices = data.devices.filter((device) => device.room_name === room.name);
+          const alert = alertsByRoom.get(room.name);
+          const stateName = roomState(roomDevices, alert);
+          const roomClass = roomVisualClass(room.name);
+          const shownDevices = roomDevices.slice(0, 3);
+          return `
+            <article class="room-summary-card ${roomClass} ${stateName}">
+              <div class="room-topline">
+                <strong>${escapeHtml(room.name)}</strong>
+                ${alert ? `<span class="tag bad">告警</span>` : `<span class="tag ${stateName === "active" ? "ok" : "info"}">${roomStatusLabel(stateName)}</span>`}
+              </div>
+              ${renderRoomLiveScene(roomDevices, canOperate, roomClass)}
+              <p class="room-note">${escapeHtml(roomSummary(roomDevices, alert))}</p>
+              <div class="room-devices">
+                ${shownDevices.map((device) => `
+                  <span class="mini-device ${isDeviceActive(device) ? "online" : ""}">
+                    ${escapeHtml(device.name)}：${escapeHtml(device.status)}
+                  </span>
+                `).join("")}
+              </div>
+            </article>
+          `;
+        }).join("")}
       </div>
-      <div class="living-device-strip">
-        ${livingDevices.map((device) => `
-          <span class="mini-device ${isDeviceActive(device) ? "online" : ""}">
-            ${escapeHtml(device.name)}：${escapeHtml(device.status)}
-          </span>
-        `).join("")}
-      </div>
-    </section>
+    </div>
   `;
 }
 
@@ -271,46 +373,17 @@ function renderHomeVisual(data, user) {
     <section class="panel home-demo" id="section-home-demo">
       <div class="panel-head">
         <div>
-          <h2>全屋智能联动演示</h2>
-          <p class="muted">实时设备态势与联动结果。</p>
+          <h2>房屋态势与联动控制</h2>
+          <p class="muted">左侧看房间状态，右侧放会改变这些状态的控制。</p>
         </div>
-        <span class="tag info">可视化演示</span>
+        <span class="tag info">可操作</span>
       </div>
-      ${renderLivingRoomScene(data, canOperate, alertsByRoom)}
-      <div class="house-stage" aria-label="全屋智能房屋态势图">
-        ${data.rooms.map((room) => {
-          const roomDevices = data.devices.filter((device) => device.room_name === room.name);
-          const alert = alertsByRoom.get(room.name);
-          const lightOn = roomDevices.some((device) => device.type === "light" && device.status === "on");
-          const cameraOn = roomDevices.some((device) => device.type === "camera" && device.status !== "privacy" && device.online);
-          const lockClosed = roomDevices.some((device) => device.type === "lock" && device.status === "locked");
-          const sensorArmed = roomDevices.some((device) => device.type === "sensor" && device.status === "armed");
-          const alarmActive = roomDevices.some((device) => device.type === "alarm" && device.status === "active");
-          const roomState = alert || alarmActive ? "alert" : lightOn || cameraOn || sensorArmed ? "active" : "idle";
-
-          return `
-            <article class="room-tile ${roomVisualClass(room.name)} ${roomState}">
-              <div class="room-topline">
-                <strong>${escapeHtml(room.name)}</strong>
-                ${alert ? `<span class="tag bad">告警</span>` : `<span class="tag ${roomState === "active" ? "ok" : "info"}">${roomState === "active" ? "运行中" : "待机"}</span>`}
-              </div>
-              <div class="room-scene">
-                <span class="window ${cameraOn ? "online" : ""}"></span>
-                <span class="lamp ${lightOn ? "on" : ""}"></span>
-                <span class="sensor ${sensorArmed ? "armed" : ""} ${alert || alarmActive ? "warning" : ""}"></span>
-                ${lockClosed ? `<span class="door-lock locked"></span>` : `<span class="door-lock"></span>`}
-              </div>
-              <p class="room-note">${escapeHtml(roomSummary(roomDevices, alert))}</p>
-              <div class="room-devices">
-                ${roomDevices.map((device) => `
-                  <span class="mini-device ${isDeviceActive(device) ? "online" : ""}">
-                    ${escapeHtml(device.name)}：${escapeHtml(device.status)}
-                  </span>
-                `).join("")}
-              </div>
-            </article>
-          `;
-        }).join("")}
+      <div class="control-layout">
+        ${renderRoomOverview(data, alertsByRoom, canOperate)}
+        <aside class="control-rail" aria-label="联动控制">
+          ${renderVoiceAndScenes(data, user)}
+          ${renderAlertSimulator(data, user)}
+        </aside>
       </div>
     </section>
   `;
@@ -319,7 +392,7 @@ function renderHomeVisual(data, user) {
 function renderCameras(devices) {
   const cameras = devices.filter((device) => device.type === "camera");
   return `
-    <section class="panel">
+    <section class="panel" id="section-cameras">
       <div class="panel-head">
         <h2>实时监控</h2>
         <span class="tag ok">低延迟模拟</span>
@@ -345,9 +418,9 @@ function renderCameras(devices) {
 function renderVoiceAndScenes(data, user) {
   const canOperate = user.role !== "guest";
   return `
-    <section class="panel">
-      <div class="panel-head">
-        <h2>语音与场景</h2>
+    <section class="control-box" id="section-voice-scenes">
+      <div class="control-box-head">
+        <h3>语音与场景</h3>
         <span class="tag info">NLP 模拟</span>
       </div>
       ${canOperate ? `<form id="voice-form" class="voice-row">
@@ -372,13 +445,13 @@ function renderVoiceAndScenes(data, user) {
   `;
 }
 
-function renderAlerts(data, user) {
+function renderAlertSimulator(data, user) {
   const canOperate = user.role !== "guest";
   return `
-    <section class="panel" id="section-alerts">
-      <div class="panel-head">
-        <h2>告警中心</h2>
-        <span class="tag ${data.alerts.length ? "bad" : "ok"}">${data.alerts.length ? "需处理" : "正常"}</span>
+    <section class="control-box">
+      <div class="control-box-head">
+        <h3>模拟告警</h3>
+        <span class="tag bad">联动</span>
       </div>
       ${canOperate ? `<form id="simulate-form" class="simulate-row">
         <label>房间
@@ -386,7 +459,7 @@ function renderAlerts(data, user) {
             ${data.rooms.map((room) => `<option value="${room.id}">${escapeHtml(room.name)}</option>`).join("")}
           </select>
         </label>
-        <label>模拟事件
+        <label>事件
           <select name="event_type">
             <option value="intrusion">入侵</option>
             <option value="smoke">烟雾</option>
@@ -395,9 +468,21 @@ function renderAlerts(data, user) {
             <option value="motion">移动检测</option>
           </select>
         </label>
-        <button class="danger" type="submit">触发模拟告警</button>
-      </form>` : ""}
-      <div class="list" style="margin-top: 14px;">
+        <button class="danger" type="submit">触发告警</button>
+      </form>` : `<p class="muted">访客只读。</p>`}
+    </section>
+  `;
+}
+
+function renderAlerts(data, user) {
+  const canOperate = user.role !== "guest";
+  return `
+    <section class="panel" id="section-alerts">
+      <div class="panel-head">
+        <h2>告警中心</h2>
+        <span class="tag ${data.alerts.length ? "bad" : "ok"}">${data.alerts.length ? "需处理" : "正常"}</span>
+      </div>
+      <div class="list">
         ${data.alerts.length ? data.alerts.map((alert) => `
           <article class="alert-item ${escapeHtml(alert.severity)}">
             <div class="device-title">
@@ -435,11 +520,20 @@ function renderRecordings(data) {
   `;
 }
 
+function recordingTitle(recording) {
+  const roomName = String(recording.room_name || "").trim();
+  let title = String(recording.title || "").trim();
+  while (roomName && title.startsWith(roomName)) {
+    title = title.slice(roomName.length).trimStart();
+  }
+  return title;
+}
+
 function recordingItems(recordings) {
   return recordings.map((recording) => `
     <article class="recording-item">
       <div class="device-title">
-        <strong>${escapeHtml(recording.title)}</strong>
+        <strong>${escapeHtml(recordingTitle(recording))}</strong>
         <span class="tag info">${escapeHtml(recording.event_type)}</span>
       </div>
       <div class="muted">${escapeHtml(recording.room_name)} · ${escapeHtml(recording.started_at)} · ${recording.duration_seconds}s</div>
@@ -508,18 +602,51 @@ function renderLogs(logs) {
 }
 
 function bindActions() {
+  const navButtons = [...document.querySelectorAll("[data-section]")];
+  const sectionEntries = navButtons
+    .map((button) => ({
+      id: button.dataset.section,
+      button,
+      target: document.querySelector(`#section-${button.dataset.section}`),
+    }))
+    .filter((entry) => entry.target);
+
+  function setActiveSection(sectionId) {
+    state.activeSection = sectionId;
+    navButtons.forEach((item) => {
+      item.classList.toggle("active", item.dataset.section === sectionId);
+    });
+  }
+
+  function syncActiveSection() {
+    const anchorTop = 140;
+    const current = sectionEntries
+      .map((entry) => ({
+        ...entry,
+        distance: Math.abs(entry.target.getBoundingClientRect().top - anchorTop),
+      }))
+      .sort((left, right) => left.distance - right.distance)[0] || sectionEntries[0];
+    if (current && current.id !== state.activeSection) {
+      setActiveSection(current.id);
+    }
+  }
+
   document.querySelectorAll("[data-section]").forEach((button) => {
     button.addEventListener("click", () => {
       const sectionId = button.dataset.section;
       const target = document.querySelector(`#section-${sectionId}`);
       if (!target) return;
-      state.activeSection = sectionId;
-      document.querySelectorAll("[data-section]").forEach((item) => {
-        item.classList.toggle("active", item === button);
-      });
+      setActiveSection(sectionId);
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
+
+  if (scrollSyncHandler) {
+    window.removeEventListener("scroll", scrollSyncHandler);
+  }
+  scrollSyncHandler = syncActiveSection;
+  window.addEventListener("scroll", scrollSyncHandler, { passive: true });
+  syncActiveSection();
 
   document.querySelector("#logout").addEventListener("click", () => {
     localStorage.removeItem("smart-home-token");
@@ -537,6 +664,7 @@ function bindActions() {
           body: JSON.stringify({ status: button.dataset.status }),
         });
         setMessage("设备状态已更新。");
+        focusHomeDemoAfterUpdate();
         await loadDashboard();
       } catch (error) {
         setMessage(error.message, true);
@@ -550,6 +678,7 @@ function bindActions() {
       try {
         await api(`/api/scenes/${button.dataset.scene}/activate`, { method: "POST" });
         setMessage("场景已启动。");
+        focusHomeDemoAfterUpdate();
         await loadDashboard();
       } catch (error) {
         setMessage(error.message, true);
@@ -566,6 +695,7 @@ function bindActions() {
           body: JSON.stringify({ note: "演示中确认告警，已完成处置。" }),
         });
         setMessage("告警已关闭。");
+        focusHomeDemoAfterUpdate();
         await loadDashboard();
       } catch (error) {
         setMessage(error.message, true);
@@ -586,6 +716,7 @@ function bindActions() {
         }),
       });
       setMessage("模拟告警已触发，并执行联动策略。");
+      focusHomeDemoAfterUpdate();
       await loadDashboard();
     } catch (error) {
       setMessage(error.message, true);
@@ -602,6 +733,7 @@ function bindActions() {
         body: JSON.stringify({ command: form.get("command") }),
       });
       setMessage(payload.result.message);
+      focusHomeDemoAfterUpdate();
       await loadDashboard();
     } catch (error) {
       setMessage(error.message, true);

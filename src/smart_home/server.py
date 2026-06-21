@@ -156,7 +156,7 @@ def run_server(host: str, port: int, db_path: Path, static_dir: Path) -> None:
     handler = create_handler(service, auth, static_dir)
     httpd = ThreadingHTTPServer((host, port), handler)
     print(f"Smart home prototype running at http://{host}:{port}")
-    print("Demo users: admin/admin123, member/member123, guest/guest123")
+    print("Demo users: admin/Admin@SE2026!, member/Member@SE2026!, guest/Guest@SE2026!")
     try:
         httpd.serve_forever()
     finally:

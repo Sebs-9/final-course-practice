@@ -22,9 +22,9 @@ class SmartHomeServiceTest(unittest.TestCase):
         self.db.seed()
         self.auth = AuthService(self.db)
         self.service = SmartHomeService(self.db, self.auth)
-        self.admin = self.auth.login("admin", "admin123")["user"]
-        self.member = self.auth.login("member", "member123")["user"]
-        self.guest = self.auth.login("guest", "guest123")["user"]
+        self.admin = self.auth.login("admin", "Admin@SE2026!")["user"]
+        self.member = self.auth.login("member", "Member@SE2026!")["user"]
+        self.guest = self.auth.login("guest", "Guest@SE2026!")["user"]
 
     def tearDown(self) -> None:
         self.db.close()
@@ -59,6 +59,8 @@ class SmartHomeServiceTest(unittest.TestCase):
         self.assertEqual(alarm["status"], "active")
         recordings = self.service.recordings(event_type="intrusion")
         self.assertGreaterEqual(len(recordings), 1)
+        self.assertNotIn("玄关玄关", recordings[0]["title"])
+        self.assertNotIn("玄关", recordings[0]["title"])
 
     def test_recording_filter_by_keyword(self) -> None:
         records = self.service.recordings(keyword="厨房")

@@ -150,6 +150,13 @@ class SmartHomeService:
             "door_open": f"{room['name']} 门窗传感器异常开启。",
             "motion": f"{room['name']} 检测到移动目标。",
         }
+        recording_title_map = {
+            "intrusion": "疑似陌生人闯入片段",
+            "smoke": "烟雾异常片段",
+            "fall": "疑似跌倒片段",
+            "door_open": "门窗异常片段",
+            "motion": "移动检测片段",
+        }
         severity = severity_map.get(event_type, "medium")
         message = message_map.get(event_type, f"{room['name']} 出现 {event_type} 事件。")
         device = self._best_device_for_event(room_id, event_type)
@@ -171,7 +178,7 @@ class SmartHomeService:
                 (
                     room_id,
                     camera["id"],
-                    f"{room['name']}{message_map.get(event_type, event_type)}片段",
+                    recording_title_map.get(event_type, f"{event_type} 事件片段"),
                     event_type,
                     now,
                     60,

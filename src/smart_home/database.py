@@ -140,24 +140,29 @@ class Database:
             self.execute(statement)
 
     def seed(self) -> None:
-        existing = self.query_one("SELECT COUNT(*) AS count FROM rooms")
-        if existing and existing["count"] > 0:
-            return
-
         from .auth import hash_password
 
         now = utc_now()
+        demo_users = [
+            ("admin", hash_password("Admin@SE2026!"), "admin", "系统管理员", now),
+            ("member", hash_password("Member@SE2026!"), "member", "家庭成员", now),
+            ("guest", hash_password("Guest@SE2026!"), "guest", "访客查看者", now),
+        ]
         self.executemany(
             """
             INSERT INTO users(username, password_hash, role, display_name, created_at)
             VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                password_hash = excluded.password_hash,
+                role = excluded.role,
+                display_name = excluded.display_name
             """,
-            [
-                ("admin", hash_password("admin123"), "admin", "系统管理员", now),
-                ("member", hash_password("member123"), "member", "家庭成员", now),
-                ("guest", hash_password("guest123"), "guest", "访客查看者", now),
-            ],
+            demo_users,
         )
+
+        existing = self.query_one("SELECT COUNT(*) AS count FROM rooms")
+        if existing and existing["count"] > 0:
+            return
 
         rooms = [
             ("玄关", "1F", "入户门、门锁和门口摄像头区域"),
