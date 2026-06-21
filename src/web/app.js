@@ -5,6 +5,7 @@ const state = {
   error: "",
   activeSection: "overview",
   pendingFocusSection: "",
+  selectedRecordingId: null,
 };
 
 const app = document.querySelector("#app");
@@ -268,19 +269,23 @@ function roomMiniVisual(roomClass, status) {
 
   if (roomClass === "kitchen") {
     return `
+      <div class="mini-kitchen-window"><span></span><span></span></div>
+      <div class="mini-range-hood"></div>
+      <div class="mini-cabinet-row"><span></span><span></span><span></span></div>
       <div class="mini-counter"></div>
-      <div class="mini-cabinets"><span></span><span></span><span></span></div>
-      <div class="mini-stove"></div>
+      <div class="mini-sink"><span></span></div>
+      <div class="mini-faucet"></div>
+      <div class="mini-stove"><span></span><span></span></div>
       <div class="mini-smoke ${status.sensorArmed ? "armed" : ""}"></div>
     `;
   }
 
   if (roomClass === "balcony") {
     return `
-      <div class="mini-rail"></div>
-      <div class="mini-balcony-door"></div>
-      <div class="mini-plant"></div>
-      ${sensor}
+      <div class="mini-sliding-door"><span></span><span></span></div>
+      <div class="mini-balcony-floor"></div>
+      <div class="mini-balcony-rail"><span></span><span></span><span></span><span></span></div>
+      <div class="mini-door-sensor ${status.sensorArmed ? "armed" : ""}"></div>
     `;
   }
 
@@ -505,7 +510,7 @@ function renderRecordings(data) {
     <section class="panel" id="section-recordings">
       <div class="panel-head">
         <h2>录像回放</h2>
-        <span class="tag info">事件索引</span>
+        <span class="tag info">模拟播放</span>
       </div>
       <form id="recording-filter" class="filter-row">
         <label>关键词
@@ -513,11 +518,17 @@ function renderRecordings(data) {
         </label>
         <button class="secondary" type="submit">检索</button>
       </form>
+      ${renderRecordingPlayer(data.recordings)}
       <div class="list" id="recording-list" style="margin-top: 14px;">
         ${recordingItems(data.recordings)}
       </div>
     </section>
   `;
+}
+
+function selectedRecording(recordings) {
+  if (!recordings.length) return null;
+  return recordings.find((recording) => recording.id === state.selectedRecordingId) || recordings[0];
 }
 
 function recordingTitle(recording) {
@@ -526,18 +537,70 @@ function recordingTitle(recording) {
   while (roomName && title.startsWith(roomName)) {
     title = title.slice(roomName.length).trimStart();
   }
+  title = title
+    .replace(/^检测到/, "")
+    .replace(/。片段$/, "片段")
+    .replace(/。$/, "");
   return title;
 }
 
+function playbackProgress(recording) {
+  const duration = Number(recording.duration_seconds || 0);
+  return Math.max(24, Math.min(86, 24 + (duration % 64)));
+}
+
+function renderRecordingPlayer(recordings) {
+  const recording = selectedRecording(recordings);
+  if (!recording) {
+    return `<div class="recording-player empty" id="recording-player">暂无可回放录像。</div>`;
+  }
+
+  return `
+    <div class="recording-player" id="recording-player">
+      <div class="playback-screen ${escapeHtml(recording.event_type)}">
+        <div class="playback-osd">
+          <span>PLAYBACK</span>
+          <span>${escapeHtml(recording.started_at)}</span>
+        </div>
+        <div class="playback-scan"></div>
+        <div class="playback-target"></div>
+        <div class="playback-controls">
+          <button class="play-toggle" type="button" aria-label="模拟播放">▶</button>
+          <div class="playback-progress"><span style="width: ${playbackProgress(recording)}%;"></span></div>
+          <span>${recording.duration_seconds}s</span>
+        </div>
+      </div>
+      <div class="playback-detail">
+        <h3>${escapeHtml(recordingTitle(recording))}</h3>
+        <div class="recording-meta">
+          <span>房间：${escapeHtml(recording.room_name)}</span>
+          <span>类型：${escapeHtml(recording.event_type)}</span>
+          <span>时长：${recording.duration_seconds}s</span>
+        </div>
+        <p>${escapeHtml(recording.summary)}</p>
+      </div>
+    </div>
+  `;
+}
+
 function recordingItems(recordings) {
+  const activeRecording = selectedRecording(recordings);
+  const activeId = activeRecording?.id;
   return recordings.map((recording) => `
-    <article class="recording-item">
+    <article class="recording-item ${recording.id === activeId ? "active" : ""}">
       <div class="device-title">
         <strong>${escapeHtml(recordingTitle(recording))}</strong>
         <span class="tag info">${escapeHtml(recording.event_type)}</span>
       </div>
-      <div class="muted">${escapeHtml(recording.room_name)} · ${escapeHtml(recording.started_at)} · ${recording.duration_seconds}s</div>
+      <div class="recording-meta">
+        <span>房间：${escapeHtml(recording.room_name)}</span>
+        <span>时间：${escapeHtml(recording.started_at)}</span>
+        <span>时长：${recording.duration_seconds}s</span>
+      </div>
       <p>${escapeHtml(recording.summary)}</p>
+      <div class="controls">
+        <button class="secondary" data-playback="${recording.id}" type="button">${recording.id === activeId ? "正在播放" : "播放"}</button>
+      </div>
     </article>
   `).join("") || `<p class="muted">没有匹配的录像。</p>`;
 }
@@ -601,6 +664,23 @@ function renderLogs(logs) {
   `;
 }
 
+function activateRecordingPlayback(recordings, recordingId) {
+  state.selectedRecordingId = Number(recordingId);
+  const player = document.querySelector("#recording-player");
+  const list = document.querySelector("#recording-list");
+  if (player) player.outerHTML = renderRecordingPlayer(recordings);
+  if (list) list.innerHTML = recordingItems(recordings);
+  bindPlaybackButtons(recordings);
+}
+
+function bindPlaybackButtons(recordings) {
+  document.querySelectorAll("[data-playback]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activateRecordingPlayback(recordings, button.dataset.playback);
+    });
+  });
+}
+
 function bindActions() {
   const navButtons = [...document.querySelectorAll("[data-section]")];
   const sectionEntries = navButtons
@@ -647,6 +727,7 @@ function bindActions() {
   scrollSyncHandler = syncActiveSection;
   window.addEventListener("scroll", scrollSyncHandler, { passive: true });
   syncActiveSection();
+  bindPlaybackButtons(state.dashboard?.recordings || []);
 
   document.querySelector("#logout").addEventListener("click", () => {
     localStorage.removeItem("smart-home-token");
@@ -747,7 +828,10 @@ function bindActions() {
     try {
       const keyword = encodeURIComponent(form.get("keyword") || "");
       const payload = await api(`/api/recordings?keyword=${keyword}`);
+      state.selectedRecordingId = selectedRecording(payload.recordings)?.id || null;
+      document.querySelector("#recording-player").outerHTML = renderRecordingPlayer(payload.recordings);
       document.querySelector("#recording-list").innerHTML = recordingItems(payload.recordings);
+      bindPlaybackButtons(payload.recordings);
     } catch (error) {
       setMessage(error.message, true);
       renderApp();
