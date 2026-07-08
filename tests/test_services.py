@@ -123,6 +123,17 @@ class SmartHomeServiceTest(unittest.TestCase):
         resolved = self.service.resolve_alert(self.member, alert["id"], "已通知家人并检查厨房。")
         self.assertEqual(resolved["status"], "resolved")
         self.assertIn("厨房", resolved["resolution_note"])
+        self.assertEqual(self.service.device(9)["status"], "standby")
+
+    def test_resolve_alert_keeps_alarm_active_when_other_alerts_are_open(self) -> None:
+        first = self.service.simulate_alert(self.member, "smoke", 4)
+        second = self.service.simulate_alert(self.member, "intrusion", 1)
+
+        self.service.resolve_alert(self.member, first["id"], "厨房烟雾已排查。")
+        self.assertEqual(self.service.device(9)["status"], "active")
+
+        self.service.resolve_alert(self.member, second["id"], "玄关入侵已排查。")
+        self.assertEqual(self.service.device(9)["status"], "standby")
 
     def test_deepseek_config_is_saved_locally_without_exposing_secret(self) -> None:
         api_key = "sk-test-1234567890"

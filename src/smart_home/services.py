@@ -243,6 +243,7 @@ class SmartHomeService:
             """,
             (now, note or "已确认并处理。", alert_id),
         )
+        self._restore_alarms_if_all_alerts_resolved(now)
         self.log(user, "resolve_alert", "alert", alert_id, note or "已确认并处理。")
         return self.db.query_one("SELECT * FROM alerts WHERE id = ?", (alert_id,)) or {}
 
@@ -467,6 +468,11 @@ class SmartHomeService:
             self.db.execute("UPDATE devices SET status = 'on', updated_at = ? WHERE room_id = ? AND type = 'light'", (now, room_id))
             if event_type == "intrusion":
                 self.db.execute("UPDATE devices SET status = 'active', updated_at = ? WHERE type = 'camera'", (now,))
+
+    def _restore_alarms_if_all_alerts_resolved(self, now: str) -> None:
+        remaining = self.db.query_one("SELECT COUNT(*) AS count FROM alerts WHERE status != 'resolved'")
+        if remaining and remaining["count"] == 0:
+            self.db.execute("UPDATE devices SET status = 'standby', updated_at = ? WHERE type = 'alarm'", (now,))
 
     def _scene_from_command(self, command: str) -> dict[str, Any] | None:
         for scene in self.scenes():
