@@ -1,4 +1,4 @@
-# 最终提交检查清单
+# 材料检查清单
 
 ## 文档材料
 
@@ -35,10 +35,9 @@
 - [x] 15 分钟汇报视频脚本：`docs/report-video-script.md`
 - [x] 实际界面截图：`assets/dashboard-authenticated.png`、`assets/dashboard-current.png`
 - [x] 提交材料索引：`deliverables/submission-materials-index.md`
-- [ ] 实际录屏视频：按课程要求录制后放入最终提交包
 - [x] 本地服务健康检查：`/health` 返回 `{"status":"ok"}`
 - [x] 登录和看板接口检查：admin 账号可返回 5 个房间、9 个设备、3 个摄像头
-- [x] DeepSeek 真实连接测试：使用本机代理 `127.0.0.1:7897` 测试通过，API key 不进入仓库
+- [x] DeepSeek 真实连接测试：使用本机代理 `127.0.0.1:7897` 测试通过，密钥采用本地配置和脱敏展示
 - [x] 自动化测试：31 个测试通过
 
 ## 提交前命令
