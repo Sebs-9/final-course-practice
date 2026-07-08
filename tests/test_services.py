@@ -106,6 +106,22 @@ class SmartHomeServiceTest(unittest.TestCase):
         self.assertNotIn("玄关玄关", recordings[0]["title"])
         self.assertNotIn("玄关", recordings[0]["title"])
 
+    def test_automation_rules_are_loaded_from_database(self) -> None:
+        rules = self.service.automation_rules()
+        trigger_types = {rule["trigger_type"] for rule in rules}
+
+        self.assertIn("intrusion", trigger_types)
+        self.assertIn("smoke", trigger_types)
+        self.assertIsInstance(rules[0]["enabled"], bool)
+
+    def test_disabled_automation_rule_skips_emergency_linkage(self) -> None:
+        self.db.execute("UPDATE automation_rules SET enabled = 0 WHERE trigger_type = ?", ("smoke",))
+
+        alert = self.service.simulate_alert(self.admin, "smoke", 4)
+
+        self.assertEqual(alert["event_type"], "smoke")
+        self.assertEqual(self.service.device(9)["status"], "standby")
+
     def test_recording_filter_by_keyword(self) -> None:
         records = self.service.recordings(keyword="厨房")
         self.assertTrue(any("厨房" in item["title"] or "厨房" in item["summary"] for item in records))

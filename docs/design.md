@@ -111,7 +111,7 @@ ER 图原始素材：`diagrams/er-diagram.mmd`。
 
 - `scenes`：场景名称、说明和当前激活状态。
 - `scene_actions`：场景与设备目标状态的映射。
-- `automation_rules`：异常事件和联动策略说明。
+- `automation_rules`：异常事件和联动策略配置，业务层会读取 enabled 状态决定是否执行设备联动。
 - `operation_logs`：用户操作审计日志。
 
 ## 6. 接口设计
@@ -144,7 +144,7 @@ ER 图原始素材：`diagrams/er-diagram.mmd`。
 2. 接口层校验登录令牌。
 3. 业务层创建告警记录。
 4. 业务层创建录像记录。
-5. 业务层按事件类型执行联动策略。
+5. 业务层读取 `automation_rules`，仅在对应规则启用时执行联动策略。
 6. 写入审计日志。
 7. 前端刷新看板，展示告警和设备变化。
 8. 用户确认处理告警后，业务层将告警状态更新为 resolved；若已无其他未处理告警，则将声光警报器恢复为 standby。

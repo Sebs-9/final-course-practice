@@ -49,7 +49,7 @@ http://127.0.0.1:8000
 python -m unittest discover -s tests -v
 ```
 
-当前结果：29 个测试全部通过。
+当前结果：31 个测试全部通过。
 
 ## 关键文档
 
@@ -61,4 +61,5 @@ python -m unittest discover -s tests -v
 - `docs/deployment-and-user-guide.md`：部署与操作说明。
 - `docs/team-work-and-reflection-template.md`：6 名组员分工与课程实践心得。
 - `docs/report-video-script.md`：15 分钟项目汇报视频录制脚本。
+- `docs/version-history.md`：真实 Git 版本管理记录。
 - `deliverables/submission-materials-index.md`：最终提交材料索引。

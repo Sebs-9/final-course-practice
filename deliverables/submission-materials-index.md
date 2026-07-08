@@ -10,6 +10,7 @@
 | 项目管理文档 | `docs/project-management.md` |
 | 部署与操作说明 | `docs/deployment-and-user-guide.md` |
 | 成员分工与课程实践心得 | `docs/team-work-and-reflection-template.md` |
+| 版本管理记录 | `docs/version-history.md` |
 
 ## 2. 图表原始素材
 
@@ -46,7 +47,7 @@
 
 | 检查项 | 结果 |
 |---|---|
-| 自动化测试 | `python -m unittest discover -s tests -v`，29 个测试通过 |
+| 自动化测试 | `python -m unittest discover -s tests -v`，31 个测试通过 |
 | 本地启动 | `python src/run.py` 后访问 `http://127.0.0.1:8000` |
 | 演示账号 | `admin/Admin@SE2026!`、`member/Member@SE2026!`、`guest/Guest@SE2026!` |
 | DeepSeek 功能 | 使用本机代理 `127.0.0.1:7897` 测试通过；API key 不纳入提交包 |

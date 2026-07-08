@@ -53,7 +53,7 @@ python -m unittest discover -s tests -v
 实际结果：
 
 ```text
-Ran 29 tests in 6.909s
+Ran 31 tests in 7.008s
 
 OK
 ```
@@ -76,6 +76,8 @@ OK
 | TC-F12 | DeepSeek 连接测试 | member 已登录且已保存密钥 | 调用测试连接接口 | 返回连接成功和模型信息 | `test_deepseek_test_connection_uses_saved_key` |
 | TC-F13 | DeepSeek 语音解析 | member 已登录且已保存密钥 | 执行“帮我把客厅亮一点” | DeepSeek 解析为设备控制，客厅灯变为 on | `test_deepseek_voice_command_controls_device` |
 | TC-F14 | DeepSeek 失败回退 | member 已登录且 DeepSeek 返回无效状态 | 执行本地规则可识别指令 | 系统回退本地规则并完成操作 | `test_deepseek_voice_falls_back_to_local_rules` |
+| TC-F15 | 自动化规则加载 | 系统已初始化 | 查询自动化规则 | 返回入侵、烟雾等规则，enabled 字段为布尔值 | `test_automation_rules_are_loaded_from_database` |
+| TC-F16 | 自动化规则禁用 | 禁用 smoke 规则 | 触发厨房烟雾告警 | 告警仍生成，但警报器不执行联动 | `test_disabled_automation_rule_skips_emergency_linkage` |
 
 ## 7. 安全性测试用例
 
@@ -115,4 +117,4 @@ OK
 
 ## 11. 测试结论
 
-自动化测试覆盖了登录权限、设备控制、语音指令、DeepSeek 配置与回退、异常告警、录像检索、场景模式、告警处置和接口安全等关键路径。当前 29 个自动化测试全部通过，系统满足课程原型演示和测试报告要求。服务启动后，`/health` 返回 `{"status":"ok"}`，登录和看板接口可正常返回用户、设备、房间和摄像头统计。
+自动化测试覆盖了登录权限、设备控制、语音指令、DeepSeek 配置与回退、异常告警、自动化规则、录像检索、场景模式、告警处置和接口安全等关键路径。当前 31 个自动化测试全部通过，系统满足课程原型演示和测试报告要求。服务启动后，`/health` 返回 `{"status":"ok"}`，登录和看板接口可正常返回用户、设备、房间和摄像头统计。

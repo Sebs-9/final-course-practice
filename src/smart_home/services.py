@@ -63,6 +63,7 @@ class SmartHomeService:
             "alerts": alerts,
             "recordings": recordings,
             "scenes": scenes,
+            "automationRules": self.automation_rules(),
             "logs": logs,
             "deepseek": self.deepseek_config(user),
         }
@@ -88,6 +89,12 @@ class SmartHomeService:
         rows = self.db.query_all("SELECT * FROM scenes ORDER BY id")
         for row in rows:
             row["is_active"] = bool(row["is_active"])
+        return rows
+
+    def automation_rules(self) -> list[dict[str, Any]]:
+        rows = self.db.query_all("SELECT * FROM automation_rules ORDER BY id")
+        for row in rows:
+            row["enabled"] = bool(row["enabled"])
         return rows
 
     def alerts(self, status: str | None = None, limit: int | None = None) -> list[dict[str, Any]]:
@@ -462,12 +469,20 @@ class SmartHomeService:
         return self.db.query_one("SELECT * FROM devices WHERE type = 'camera' ORDER BY id LIMIT 1")
 
     def _apply_emergency_linkage(self, room_id: int, event_type: str) -> None:
+        if not self._enabled_automation_rule(event_type):
+            return
         if event_type in {"intrusion", "smoke", "fall"}:
             now = utc_now()
             self.db.execute("UPDATE devices SET status = 'active', updated_at = ? WHERE type = 'alarm'", (now,))
             self.db.execute("UPDATE devices SET status = 'on', updated_at = ? WHERE room_id = ? AND type = 'light'", (now, room_id))
             if event_type == "intrusion":
                 self.db.execute("UPDATE devices SET status = 'active', updated_at = ? WHERE type = 'camera'", (now,))
+
+    def _enabled_automation_rule(self, event_type: str) -> dict[str, Any] | None:
+        return self.db.query_one(
+            "SELECT * FROM automation_rules WHERE trigger_type = ? AND enabled = 1",
+            (event_type,),
+        )
 
     def _restore_alarms_if_all_alerts_resolved(self, now: str) -> None:
         remaining = self.db.query_one("SELECT COUNT(*) AS count FROM alerts WHERE status != 'resolved'")

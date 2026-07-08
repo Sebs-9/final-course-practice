@@ -65,11 +65,20 @@ python -m unittest discover -s tests -v
 当前测试结果：
 
 ```text
-Ran 29 tests in 6.909s
+Ran 31 tests in 7.008s
 OK
 ```
 
-## 6. DeepSeek 语音解析测试
+## 6. 可选安全配置
+
+系统默认使用内置密码盐，便于本地演示直接运行。若需要在正式环境中替换密码盐，可在启动前设置：
+
+```powershell
+$env:SMART_HOME_PASSWORD_SALT="your-own-random-salt"
+python src\run.py
+```
+
+## 7. DeepSeek 语音解析测试
 
 系统默认不依赖外部大模型，语音指令会使用本地规则解析。若需要演示 DeepSeek 解析能力：
 
@@ -86,7 +95,7 @@ $env:HTTPS_PROXY="http://127.0.0.1:7897"
 python src\run.py
 ```
 
-## 7. 目录说明
+## 8. 目录说明
 
 | 目录 | 内容 |
 |---|---|
@@ -99,7 +108,7 @@ python src\run.py
 | `tests/` | 自动化测试 |
 | `deliverables/` | 最终提交检查材料 |
 
-## 8. 常见问题
+## 9. 常见问题
 
 ### 端口被占用
 

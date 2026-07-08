@@ -8,6 +8,7 @@
 - [x] 项目管理文档：`docs/project-management.md`
 - [x] 部署与操作说明：`docs/deployment-and-user-guide.md`
 - [x] 成员分工与心得：`docs/team-work-and-reflection-template.md`
+- [x] 版本管理记录：`docs/version-history.md`
 
 ## 图表原始素材
 
@@ -38,6 +39,7 @@
 - [x] 本地服务健康检查：`/health` 返回 `{"status":"ok"}`
 - [x] 登录和看板接口检查：admin 账号可返回 5 个房间、9 个设备、3 个摄像头
 - [x] DeepSeek 真实连接测试：使用本机代理 `127.0.0.1:7897` 测试通过，API key 不进入仓库
+- [x] 自动化测试：31 个测试通过
 
 ## 提交前命令
 

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import secrets
 from typing import Any
 
 from .database import Database
 
 
-PASSWORD_SALT = "se-final-smart-home-2026"
+PASSWORD_SALT = os.getenv("SMART_HOME_PASSWORD_SALT", "se-final-smart-home-2026")
 
 
 def hash_password(password: str) -> str:
