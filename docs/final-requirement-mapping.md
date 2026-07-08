@@ -10,7 +10,7 @@
 | 软件设计文档 | `docs/design.md` | 包含分层架构、模块设计、数据库设计、接口设计、关键流程和界面设计。 |
 | 测试计划与用例报告 | `docs/test-plan-and-cases.md` | 包含测试目标、测试环境、功能/安全/兼容性用例、缺陷记录和 31 个自动化测试结果。 |
 | 项目管理文档 | `docs/project-management.md` | 包含 2 个月计划、6 人分工、任务拆分、风险管理和版本管理规范。 |
-| 成员分工与心得 | `docs/team-work-and-reflection-template.md` | 组长卢鹏宇统筹，6 名成员均有 400 字以内心得。 |
+| 成员分工与心得 | `docs/team-work-and-reflection-template.md` | 按提供的真实分工列出丁天、张星宇、王胜航、包可豪、卢鹏宇、李智星 6 名成员的工作说明和 400 字以内心得。 |
 
 ## 2. 图表原始素材
 
