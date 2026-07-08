@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 data/smart_home.sqlite
 data/deepseek_config.json
+deepseekapi
 assets/chrome-capture-profile/
 
 /*.pdf

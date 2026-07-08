@@ -73,7 +73,7 @@ PDF 要求：
 - 功能测试：登录、设备控制、告警、录像、语音、场景。
 - 安全测试：错误密码、未登录、访客越权、日志权限。
 - 兼容性测试：Windows + Chrome / Edge。
-- 自动化测试结果：8 个测试全部通过。
+- 自动化测试结果：29 个测试全部通过。
 
 ## 5. 2.4 项目管理
 
@@ -93,7 +93,7 @@ PDF 要求：
 覆盖内容：
 
 - 2 个月里程碑计划。
-- 成员 A/B/C/D 的角色分工模板。
+- 6 名组员真实角色分工与课程实践心得。
 - 任务拆分和状态记录。
 - 风险识别、概率影响和应对策略。
 - 版本管理规范和质量保障措施。
@@ -148,8 +148,9 @@ PDF 要求：
 - 测试代码：`tests/`
 - 测试数据和数据库：`data/`
 - 部署说明：`docs/deployment-and-user-guide.md`
-- 成员分工与心得模板：`docs/team-work-and-reflection-template.md`
+- 成员分工与心得：`docs/team-work-and-reflection-template.md`
 - 演示提纲：`docs/presentation-outline.md`
+- 15 分钟汇报视频脚本：`docs/report-video-script.md`
 - 提交检查清单：`deliverables/submission-checklist.md`
 
 ## 8. 四、评分标准

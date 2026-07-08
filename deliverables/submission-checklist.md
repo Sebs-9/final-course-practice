@@ -7,7 +7,7 @@
 - [x] 测试计划与用例报告：`docs/test-plan-and-cases.md`
 - [x] 项目管理文档：`docs/project-management.md`
 - [x] 部署与操作说明：`docs/deployment-and-user-guide.md`
-- [x] 成员分工与心得模板：`docs/team-work-and-reflection-template.md`
+- [x] 成员分工与心得：`docs/team-work-and-reflection-template.md`
 
 ## 图表原始素材
 
@@ -25,16 +25,19 @@
 - [x] 后端代码：`src/smart_home/`
 - [x] 前端代码：`src/web/`
 - [x] 自动化测试：`tests/test_services.py`
+- [x] 接口测试：`tests/test_http_api.py`
 - [x] SQLite 数据库：启动后自动生成 `data/smart_home.sqlite`
 
 ## 演示材料
 
 - [x] 5 分钟课堂演示提纲：`docs/presentation-outline.md`
-- [x] 15 分钟汇报视频结构：`docs/presentation-outline.md`
-- [x] 实际界面截图：`assets/dashboard-authenticated.png`
+- [x] 15 分钟汇报视频脚本：`docs/report-video-script.md`
+- [x] 实际界面截图：`assets/dashboard-authenticated.png`、`assets/dashboard-current.png`
+- [x] 提交材料索引：`deliverables/submission-materials-index.md`
 - [ ] 实际录屏视频：按课程要求录制后放入最终提交包
 - [x] 本地服务健康检查：`/health` 返回 `{"status":"ok"}`
 - [x] 登录和看板接口检查：admin 账号可返回 5 个房间、9 个设备、3 个摄像头
+- [x] DeepSeek 真实连接测试：使用本机代理 `127.0.0.1:7897` 测试通过，API key 不进入仓库
 
 ## 提交前命令
 

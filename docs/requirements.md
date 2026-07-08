@@ -29,6 +29,7 @@
 - 支持异常告警、录像记录、声光警报器和灯光联动。
 - 支持按关键词检索录像和事件记录。
 - 支持文本形式的语音指令模拟，用于控制设备、查询摄像头、触发告警和切换场景。
+- 支持可选 DeepSeek 大模型语音指令解析，并在未配置或解析失败时回退到本地规则。
 - 支持离家安防、回家模式、夜间巡航、紧急警戒等场景模式。
 
 ### 4.2 范围外
@@ -48,9 +49,9 @@
 | FR-05 | 实时监控 | 系统应展示多房间摄像头模拟画面和摄像头状态。 | 高 | 首页至少展示门口、客厅、卧室摄像头画面。 |
 | FR-06 | 异常告警 | 系统应支持模拟入侵、烟雾、跌倒、门窗异常、移动检测事件。 | 高 | 触发事件后生成未处理告警。 |
 | FR-07 | 联动响应 | 高危事件应自动触发声光警报器、灯光或摄像头联动。 | 高 | 入侵事件触发后警报器为 active，摄像头为 active。 |
-| FR-08 | 告警处置 | 用户应能确认并关闭告警，系统记录处置说明。 | 高 | 处理后告警状态变为 resolved。 |
+| FR-08 | 告警处置 | 用户应能确认并关闭告警，系统记录处置说明。 | 高 | 处理后告警状态变为 resolved；若无其他未处理告警，警报器恢复 standby。 |
 | FR-09 | 录像回放 | 系统应保存事件录像记录，并支持按关键词检索。 | 中 | 输入“厨房”能检索到厨房相关录像。 |
-| FR-10 | 语音指令 | 系统应解析“打开客厅灯”“启动离家安防”“模拟厨房烟雾”等指令。 | 高 | 指令执行后返回明确结果并更新对应状态。 |
+| FR-10 | 语音指令 | 系统应解析“打开客厅灯”“启动离家安防”“模拟厨房烟雾”等指令，并支持可选 DeepSeek 解析自然语言指令。 | 高 | 指令执行后返回明确结果并更新对应状态；DeepSeek 不可用时回退到本地规则。 |
 | FR-11 | 场景模式 | 系统应支持离家安防、回家模式、夜间巡航、紧急警戒。 | 中 | 启动场景后批量更新设备状态。 |
 | FR-12 | 审计日志 | 系统应记录登录后关键操作，包括设备控制、场景切换和告警处理。 | 中 | 管理员可看到最近操作日志。 |
 
@@ -125,6 +126,7 @@
 4. 系统根据事件类型执行联动策略。
 5. 用户确认告警并填写处置说明。
 6. 告警状态变更为已处理。
+7. 若系统中没有其他未处理告警，声光警报器恢复待命状态。
 
 ### UC-05 检索录像回放
 
@@ -144,10 +146,10 @@
 主流程：
 
 1. 用户输入语音指令文本。
-2. 系统进行关键词解析。
-3. 若命中场景，则切换场景。
-4. 若命中告警，则触发模拟告警。
-5. 若命中设备，则更新设备状态。
+2. 系统检查是否已配置 DeepSeek API 密钥。
+3. 若已配置，优先调用 DeepSeek 将自然语言转换为受控动作。
+4. 若未配置或 DeepSeek 解析失败，则使用本地关键词规则解析。
+5. 若命中场景，则切换场景；若命中告警，则触发模拟告警；若命中设备，则更新设备状态。
 6. 系统返回执行结果并写入日志。
 
 ### UC-07 管理和审计
@@ -168,9 +170,9 @@
 | FR-02 | UC-03 | AuthService / SmartHomeService | `test_guest_cannot_control_device` |
 | FR-04 | UC-03 | SmartHomeService | `test_voice_command_turns_on_living_room_light` |
 | FR-06 | UC-04 | SmartHomeService | `test_simulate_alert_creates_recording_and_linkage` |
-| FR-08 | UC-04 | SmartHomeService | `test_resolve_alert_updates_status` |
+| FR-08 | UC-04 | SmartHomeService | `test_resolve_alert_updates_status`、`test_resolve_alert_keeps_alarm_active_when_other_alerts_are_open` |
 | FR-09 | UC-05 | SmartHomeService | `test_recording_filter_by_keyword` |
-| FR-10 | UC-06 | SmartHomeService | `test_voice_command_queries_camera_without_changing_status` |
+| FR-10 | UC-06 | SmartHomeService / DeepSeekClient | `test_voice_command_queries_camera_without_changing_status`、`test_deepseek_voice_command_controls_device`、`test_deepseek_voice_falls_back_to_local_rules` |
 | FR-11 | UC-06 | SmartHomeService | `test_scene_activation_updates_devices` |
 
 ## 10. 需求图表

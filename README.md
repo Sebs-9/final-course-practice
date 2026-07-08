@@ -37,9 +37,11 @@ http://127.0.0.1:8000
 
 演示账号：
 
-- 管理员：`admin / admin123`
-- 家庭成员：`member / member123`
-- 访客查看者：`guest / guest123`
+- 管理员：`admin / Admin@SE2026!`
+- 家庭成员：`member / Member@SE2026!`
+- 访客查看者：`guest / Guest@SE2026!`
+
+语音指令默认使用本地规则解析。若需要演示 DeepSeek 大模型解析，可在页面“语音与场景”区域保存 DeepSeek API 密钥并测试连接；网络环境需要代理时，先为 Python 进程设置 `HTTP_PROXY` / `HTTPS_PROXY`。
 
 ## 测试
 
@@ -47,7 +49,7 @@ http://127.0.0.1:8000
 python -m unittest discover -s tests -v
 ```
 
-当前结果：8 个测试全部通过。
+当前结果：29 个测试全部通过。
 
 ## 关键文档
 
@@ -57,3 +59,6 @@ python -m unittest discover -s tests -v
 - `docs/project-management.md`：项目管理文档。
 - `docs/final-requirement-mapping.md`：与课程考核 PDF 的逐项对应关系。
 - `docs/deployment-and-user-guide.md`：部署与操作说明。
+- `docs/team-work-and-reflection-template.md`：6 名组员分工与课程实践心得。
+- `docs/report-video-script.md`：15 分钟项目汇报视频录制脚本。
+- `deliverables/submission-materials-index.md`：最终提交材料索引。

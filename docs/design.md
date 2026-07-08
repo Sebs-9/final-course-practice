@@ -33,7 +33,7 @@
 | 设备管理模块 | 设备列表、状态更新、房间归属、设备类型管理 | `services.py` |
 | 监控与录像模块 | 摄像头列表、模拟视频展示、录像记录与检索 | `services.py`、`app.js` |
 | 告警与联动模块 | 异常事件生成、告警状态、录像创建、设备联动 | `services.py` |
-| 语音指令模块 | 解析中文指令，路由到设备、告警、场景或摄像头查询 | `services.py` |
+| 语音指令模块 | 通过 DeepSeek 或本地规则解析中文指令，路由到设备、告警、场景或摄像头查询 | `services.py`、`deepseek.py` |
 | 场景模式模块 | 离家安防、回家模式、夜间巡航、紧急警戒 | `services.py` |
 | 审计日志模块 | 记录关键操作，供管理员追溯 | `services.py` |
 | 前端工作台 | 数据展示、按钮操作、表单提交、状态刷新 | `app.js` |
@@ -129,6 +129,9 @@ ER 图原始素材：`diagrams/er-diagram.mmd`。
 | POST | `/api/alerts/{id}/resolve` | 处理告警 | admin/member |
 | GET | `/api/recordings` | 检索录像 | 登录用户 |
 | POST | `/api/voice` | 执行语音指令 | admin/member |
+| GET | `/api/deepseek/config` | 获取 DeepSeek 配置摘要 | 登录用户 |
+| POST | `/api/deepseek/config` | 保存 DeepSeek API 密钥 | admin/member |
+| POST | `/api/deepseek/test` | 测试 DeepSeek 连接 | admin/member |
 | GET | `/api/scenes` | 获取场景列表 | 登录用户 |
 | POST | `/api/scenes/{id}/activate` | 启动场景 | admin/member |
 | GET | `/api/logs` | 获取审计日志 | admin |
@@ -144,6 +147,7 @@ ER 图原始素材：`diagrams/er-diagram.mmd`。
 5. 业务层按事件类型执行联动策略。
 6. 写入审计日志。
 7. 前端刷新看板，展示告警和设备变化。
+8. 用户确认处理告警后，业务层将告警状态更新为 resolved；若已无其他未处理告警，则将声光警报器恢复为 standby。
 
 顺序图原始素材：`diagrams/sequence-alert.puml`。
 
@@ -151,10 +155,10 @@ ER 图原始素材：`diagrams/er-diagram.mmd`。
 
 系统按优先级解析语音指令：
 
-1. 是否命中场景模式，如“启动离家安防”。
-2. 是否命中告警模拟，如“模拟厨房烟雾”。
-3. 是否命中摄像头查询，如“查看客厅摄像头”。
-4. 是否命中设备控制，如“打开客厅灯”。
+1. 若已保存 DeepSeek API 密钥，优先把用户中文指令转换为受控 JSON 动作。
+2. DeepSeek 返回结果需经过设备、场景、事件类型和状态校验，避免编造不存在的资源。
+3. DeepSeek 未配置或解析失败时，回退到本地规则解析。
+4. 本地规则依次判断场景模式、告警模拟、摄像头查询和设备控制。
 5. 无法识别时返回提示。
 
 活动图原始素材：`diagrams/activity-voice.mmd`。
@@ -166,7 +170,7 @@ ER 图原始素材：`diagrams/er-diagram.mmd`。
 - 登录区：账号、密码、演示账号提示。
 - 监控总览：房间数、设备数、在线数、摄像头数、未处理告警数。
 - 实时监控：多摄像头模拟视频卡片。
-- 语音与场景：语音指令输入框和场景模式卡片。
+- 语音与场景：DeepSeek 配置、语音指令输入框和场景模式卡片。
 - 告警中心：模拟告警触发、告警列表、确认处理。
 - 录像回放：关键词检索和录像摘要展示。
 - 设备控制：按设备卡片控制状态。

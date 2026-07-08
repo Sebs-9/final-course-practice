@@ -40,7 +40,7 @@
 | 数据库 | SQLite |
 | 浏览器 | Chrome / Edge |
 | 测试框架 | Python `unittest` |
-| 测试日期 | 2026-05-28 |
+| 测试日期 | 2026-07-08 |
 
 ## 5. 自动化测试执行
 
@@ -53,7 +53,7 @@ python -m unittest discover -s tests -v
 实际结果：
 
 ```text
-Ran 8 tests in 0.964s
+Ran 29 tests in 6.909s
 
 OK
 ```
@@ -62,7 +62,7 @@ OK
 
 | 编号 | 测试项 | 前置条件 | 操作步骤 | 期望结果 | 自动化覆盖 |
 |---|---|---|---|---|---|
-| TC-F01 | 正确登录 | 系统已初始化 | 输入 admin/admin123 登录 | 登录成功，进入工作台 | 间接覆盖 |
+| TC-F01 | 正确登录 | 系统已初始化 | 输入 admin/Admin@SE2026! 登录 | 登录成功，进入工作台 | `test_login_success_returns_token_and_admin_user` |
 | TC-F02 | 错误密码 | 系统已初始化 | 输入 admin/wrong 登录 | 系统拒绝登录 | `test_login_rejects_wrong_password` |
 | TC-F03 | 访客越权控制 | guest 已登录 | 调用设备控制服务 | 抛出权限错误 | `test_guest_cannot_control_device` |
 | TC-F04 | 控制客厅灯 | member 已登录 | 执行“打开客厅灯” | 客厅灯状态变为 on | `test_voice_command_turns_on_living_room_light` |
@@ -70,7 +70,12 @@ OK
 | TC-F06 | 模拟入侵告警 | admin 已登录 | 触发玄关入侵 | 生成 open 告警，警报器启动，生成录像 | `test_simulate_alert_creates_recording_and_linkage` |
 | TC-F07 | 录像检索 | 系统存在录像 | 搜索“厨房” | 返回厨房相关录像 | `test_recording_filter_by_keyword` |
 | TC-F08 | 启动离家安防 | member 已登录 | 启动场景 1 | 门锁 locked，灯光 off | `test_scene_activation_updates_devices` |
-| TC-F09 | 处理烟雾告警 | member 已登录 | 触发烟雾并处理 | 告警状态变为 resolved | `test_resolve_alert_updates_status` |
+| TC-F09 | 处理烟雾告警 | member 已登录 | 触发烟雾并处理 | 告警状态变为 resolved，警报器恢复 standby | `test_resolve_alert_updates_status` |
+| TC-F10 | 多告警处理 | member 已登录 | 触发两个告警，仅处理其中一个 | 仍有未处理告警时警报器保持 active，全部处理后恢复 standby | `test_resolve_alert_keeps_alarm_active_when_other_alerts_are_open` |
+| TC-F11 | DeepSeek 配置保存 | admin 已登录 | 保存 DeepSeek API 密钥 | 返回配置摘要，不泄露完整密钥 | `test_deepseek_config_save_masks_secret` |
+| TC-F12 | DeepSeek 连接测试 | member 已登录且已保存密钥 | 调用测试连接接口 | 返回连接成功和模型信息 | `test_deepseek_test_connection_uses_saved_key` |
+| TC-F13 | DeepSeek 语音解析 | member 已登录且已保存密钥 | 执行“帮我把客厅亮一点” | DeepSeek 解析为设备控制，客厅灯变为 on | `test_deepseek_voice_command_controls_device` |
+| TC-F14 | DeepSeek 失败回退 | member 已登录且 DeepSeek 返回无效状态 | 执行本地规则可识别指令 | 系统回退本地规则并完成操作 | `test_deepseek_voice_falls_back_to_local_rules` |
 
 ## 7. 安全性测试用例
 
@@ -81,6 +86,9 @@ OK
 | TC-S03 | 访客控制设备 | guest 调用设备控制接口 | 返回 403 |
 | TC-S04 | 访客触发告警 | guest 调用模拟告警接口 | 返回 403 |
 | TC-S05 | 非管理员查看日志 | member 调用 `/api/logs` | 返回 403 |
+| TC-S06 | 访客保存 DeepSeek 密钥 | guest 调用 `/api/deepseek/config` | 返回 403 |
+| TC-S07 | SQL 注入式用户名 | 使用特殊用户名登录 | 登录失败且服务正常 |
+| TC-S08 | XSS 式录像关键词 | 搜索 `<script>alert(1)</script>` | 接口正常返回，前端转义展示 |
 
 ## 8. 兼容性测试用例
 
@@ -103,7 +111,8 @@ OK
 | 编号 | 缺陷描述 | 严重性 | 状态 |
 |---|---|---|---|
 | BUG-01 | “查看客厅摄像头”原先可能被误判为设备控制 | 中 | 已修复 |
+| BUG-02 | 告警确认处理后，客厅声光警报器可能仍保持 active | 中 | 已修复 |
 
 ## 11. 测试结论
 
-自动化测试覆盖了登录权限、设备控制、语音指令、异常告警、录像检索、场景模式和告警处置等关键路径。当前 8 个自动化测试全部通过，系统满足课程原型演示和测试报告要求。服务启动后，`/health` 返回 `{"status":"ok"}`，登录和看板接口可正常返回用户、设备、房间和摄像头统计。
+自动化测试覆盖了登录权限、设备控制、语音指令、DeepSeek 配置与回退、异常告警、录像检索、场景模式、告警处置和接口安全等关键路径。当前 29 个自动化测试全部通过，系统满足课程原型演示和测试报告要求。服务启动后，`/health` 返回 `{"status":"ok"}`，登录和看板接口可正常返回用户、设备、房间和摄像头统计。
