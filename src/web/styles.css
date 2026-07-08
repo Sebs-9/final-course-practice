@@ -340,6 +340,25 @@ textarea:focus {
   grid-template-columns: 1fr auto;
 }
 
+.llm-config {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.llm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.llm-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .control-rail .simulate-row {
   grid-template-columns: 1fr;
 }
@@ -1324,6 +1343,7 @@ button.mini-action:hover {
   .camera-grid,
   .room-plan-grid,
   .voice-row,
+  .llm-actions,
   .filter-row,
   .simulate-row,
   .control-rail .voice-row {

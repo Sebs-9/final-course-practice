@@ -94,6 +94,20 @@ def create_handler(service: SmartHomeService, auth: AuthService, static_dir: Pat
             if path == "/api/voice" and method == "POST":
                 body = self._read_json()
                 return {"result": service.handle_voice_command(user, body.get("command", ""))}
+            if path == "/api/deepseek/config" and method == "GET":
+                return {"config": service.deepseek_config(user)}
+            if path == "/api/deepseek/config" and method == "POST":
+                body = self._read_json()
+                return {
+                    "config": service.save_deepseek_config(
+                        user,
+                        body.get("api_key", ""),
+                        base_url=body.get("base_url"),
+                        model=body.get("model"),
+                    )
+                }
+            if path == "/api/deepseek/test" and method == "POST":
+                return service.test_deepseek_connection(user)
             if path == "/api/scenes" and method == "GET":
                 return {"scenes": service.scenes()}
             if len(parts) == 4 and parts[:2] == ["api", "scenes"] and parts[3] == "activate" and method == "POST":
@@ -152,7 +166,7 @@ def run_server(host: str, port: int, db_path: Path, static_dir: Path) -> None:
     db.init_schema()
     db.seed()
     auth = AuthService(db)
-    service = SmartHomeService(db, auth)
+    service = SmartHomeService(db, auth, llm_config_path=db_path.parent / "deepseek_config.json")
     handler = create_handler(service, auth, static_dir)
     httpd = ThreadingHTTPServer((host, port), handler)
     print(f"Smart home prototype running at http://{host}:{port}")

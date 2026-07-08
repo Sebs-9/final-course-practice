@@ -60,10 +60,10 @@ function navigationItems(user) {
   return items;
 }
 
-async function loadDashboard() {
+async function loadDashboard(options = {}) {
   try {
     state.dashboard = await api("/api/dashboard");
-    setMessage("");
+    if (!options.preserveMessage) setMessage("");
     renderApp();
   } catch (error) {
     localStorage.removeItem("smart-home-token");
@@ -422,13 +422,24 @@ function renderCameras(devices) {
 
 function renderVoiceAndScenes(data, user) {
   const canOperate = user.role !== "guest";
+  const deepseek = data.deepseek || { hasApiKey: false, maskedApiKey: "", model: "deepseek-v4-flash" };
   return `
     <section class="control-box" id="section-voice-scenes">
       <div class="control-box-head">
         <h3>语音与场景</h3>
-        <span class="tag info">NLP 模拟</span>
+        <span class="tag info">${deepseek.hasApiKey ? "DeepSeek" : "本地规则"}</span>
       </div>
-      ${canOperate ? `<form id="voice-form" class="voice-row">
+      ${canOperate ? `<form id="deepseek-form" class="llm-config">
+        <label>DeepSeek API 密钥
+          <input name="api_key" type="password" placeholder="${deepseek.hasApiKey ? `已保存：${escapeHtml(deepseek.maskedApiKey)}` : "sk-..."}" autocomplete="off" />
+        </label>
+        <div class="llm-actions">
+          <button class="secondary" type="submit">保存</button>
+          <button class="secondary" id="deepseek-test" type="button">测试连接</button>
+        </div>
+        <div class="llm-status">当前：${deepseek.hasApiKey ? `DeepSeek · ${escapeHtml(deepseek.model)}` : "本地规则解析"}</div>
+      </form>
+      <form id="voice-form" class="voice-row">
         <label>语音指令
           <input name="command" placeholder="例如：打开客厅灯 / 启动离家安防 / 模拟厨房烟雾" />
         </label>
@@ -746,7 +757,7 @@ function bindActions() {
         });
         setMessage("设备状态已更新。");
         focusHomeDemoAfterUpdate();
-        await loadDashboard();
+        await loadDashboard({ preserveMessage: true });
       } catch (error) {
         setMessage(error.message, true);
         renderApp();
@@ -760,7 +771,7 @@ function bindActions() {
         await api(`/api/scenes/${button.dataset.scene}/activate`, { method: "POST" });
         setMessage("场景已启动。");
         focusHomeDemoAfterUpdate();
-        await loadDashboard();
+        await loadDashboard({ preserveMessage: true });
       } catch (error) {
         setMessage(error.message, true);
         renderApp();
@@ -777,7 +788,7 @@ function bindActions() {
         });
         setMessage("告警已关闭。");
         focusHomeDemoAfterUpdate();
-        await loadDashboard();
+        await loadDashboard({ preserveMessage: true });
       } catch (error) {
         setMessage(error.message, true);
         renderApp();
@@ -798,7 +809,45 @@ function bindActions() {
       });
       setMessage("模拟告警已触发，并执行联动策略。");
       focusHomeDemoAfterUpdate();
-      await loadDashboard();
+      await loadDashboard({ preserveMessage: true });
+    } catch (error) {
+      setMessage(error.message, true);
+      renderApp();
+    }
+  });
+
+  document.querySelector("#deepseek-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const apiKey = String(form.get("api_key") || "").trim();
+    if (!apiKey) {
+      setMessage("请输入 DeepSeek API 密钥。", true);
+      renderApp();
+      return;
+    }
+    try {
+      await api("/api/deepseek/config", {
+        method: "POST",
+        body: JSON.stringify({ api_key: apiKey }),
+      });
+      setMessage("DeepSeek API 密钥已保存到本地。");
+      focusHomeDemoAfterUpdate();
+      await loadDashboard({ preserveMessage: true });
+    } catch (error) {
+      setMessage(error.message, true);
+      renderApp();
+    }
+  });
+
+  document.querySelector("#deepseek-test")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = "测试中";
+    try {
+      const payload = await api("/api/deepseek/test", { method: "POST" });
+      setMessage(payload.message || "DeepSeek 连接成功。");
+      focusHomeDemoAfterUpdate();
+      await loadDashboard({ preserveMessage: true });
     } catch (error) {
       setMessage(error.message, true);
       renderApp();
@@ -815,7 +864,7 @@ function bindActions() {
       });
       setMessage(payload.result.message);
       focusHomeDemoAfterUpdate();
-      await loadDashboard();
+      await loadDashboard({ preserveMessage: true });
     } catch (error) {
       setMessage(error.message, true);
       renderApp();

@@ -29,7 +29,23 @@ class SmartHomeHttpApiTest(unittest.TestCase):
         self.db.init_schema()
         self.db.seed()
         self.auth = AuthService(self.db)
-        self.service = SmartHomeService(self.db, self.auth)
+        self.deepseek_requests: list[dict[str, object]] = []
+
+        def fake_deepseek_post(
+            url: str,
+            headers: dict[str, str],
+            payload: dict[str, object],
+            timeout: float,
+        ) -> dict[str, object]:
+            self.deepseek_requests.append({"url": url, "headers": headers, "payload": payload, "timeout": timeout})
+            return {"choices": [{"message": {"content": json.dumps({"ok": True, "message": "connected"})}}]}
+
+        self.service = SmartHomeService(
+            self.db,
+            self.auth,
+            llm_config_path=Path(self.temp_dir.name) / "deepseek_config.json",
+            deepseek_http_post=fake_deepseek_post,
+        )
         handler = create_handler(self.service, self.auth, PROJECT_ROOT / "src" / "web")
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -130,6 +146,56 @@ class SmartHomeHttpApiTest(unittest.TestCase):
         member_token = self.login("member", "Member@SE2026!")
 
         status, payload = self.request("GET", "/api/logs", token=member_token)
+
+        self.assertEqual(status, 403)
+        self.assertIn("权限", str(payload["error"]))
+
+    def test_deepseek_config_save_masks_secret(self) -> None:
+        token = self.login()
+        api_key = "sk-test-1234567890"
+
+        status, payload = self.request("GET", "/api/deepseek/config", token=token)
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["config"]["hasApiKey"])
+
+        status, payload = self.request(
+            "POST",
+            "/api/deepseek/config",
+            {"api_key": api_key},
+            token=token,
+        )
+
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["config"]["hasApiKey"])
+        self.assertNotIn(api_key, json.dumps(payload, ensure_ascii=False))
+
+    def test_deepseek_test_connection_requires_saved_key(self) -> None:
+        token = self.login()
+
+        status, payload = self.request("POST", "/api/deepseek/test", token=token)
+
+        self.assertEqual(status, 400)
+        self.assertIn("请先保存", str(payload["error"]))
+
+    def test_deepseek_test_connection_uses_saved_key(self) -> None:
+        token = self.login()
+
+        self.request("POST", "/api/deepseek/config", {"api_key": "sk-test-1234567890"}, token=token)
+        status, payload = self.request("POST", "/api/deepseek/test", token=token)
+
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(self.deepseek_requests[-1]["headers"]["Authorization"], "Bearer sk-test-1234567890")
+
+    def test_guest_cannot_save_deepseek_config(self) -> None:
+        guest_token = self.login("guest", "Guest@SE2026!")
+
+        status, payload = self.request(
+            "POST",
+            "/api/deepseek/config",
+            {"api_key": "sk-test-1234567890"},
+            token=guest_token,
+        )
 
         self.assertEqual(status, 403)
         self.assertIn("权限", str(payload["error"]))

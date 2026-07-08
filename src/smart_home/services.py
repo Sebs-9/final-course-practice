@@ -2,16 +2,44 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from .auth import AuthService
 from .database import Database, utc_now
+from .deepseek import DeepSeekClient, DeepSeekConfigStore, HttpPost
+
+
+DEVICE_STATUS_OPTIONS: dict[str, set[str]] = {
+    "light": {"on", "off"},
+    "climate": {"cooling", "off"},
+    "camera": {"active", "privacy"},
+    "alarm": {"active", "standby"},
+    "lock": {"locked", "unlocked"},
+    "sensor": {"armed", "normal"},
+}
+
+ALERT_EVENT_TYPES = {"intrusion", "smoke", "fall", "door_open", "motion"}
 
 
 class SmartHomeService:
-    def __init__(self, db: Database, auth: AuthService):
+    def __init__(
+        self,
+        db: Database,
+        auth: AuthService,
+        llm_config_path: str | Path | None = None,
+        deepseek_http_post: HttpPost | None = None,
+    ):
         self.db = db
         self.auth = auth
+        config_path = Path(llm_config_path) if llm_config_path else self._default_deepseek_config_path()
+        self.deepseek_store = DeepSeekConfigStore(config_path)
+        self.deepseek = DeepSeekClient(self.deepseek_store, deepseek_http_post)
+
+    def _default_deepseek_config_path(self) -> Path:
+        if self.db.path == ":memory:":
+            return Path("data") / "deepseek_config.json"
+        return Path(self.db.path).with_name("deepseek_config.json")
 
     def dashboard(self, user: dict[str, Any]) -> dict[str, Any]:
         rooms = self.rooms()
@@ -36,6 +64,7 @@ class SmartHomeService:
             "recordings": recordings,
             "scenes": scenes,
             "logs": logs,
+            "deepseek": self.deepseek_config(user),
         }
 
     def rooms(self) -> list[dict[str, Any]]:
@@ -114,9 +143,16 @@ class SmartHomeService:
 
     def set_device_status(self, user: dict[str, Any], device_id: int, status: str) -> dict[str, Any]:
         self.auth.require(user, {"admin", "member"})
+        status = (status or "").strip()
+        if not status:
+            raise ValueError("设备状态不能为空。")
         device = self.db.query_one("SELECT * FROM devices WHERE id = ?", (device_id,))
         if not device:
             raise ValueError("设备不存在。")
+        allowed_statuses = DEVICE_STATUS_OPTIONS.get(device["type"], set())
+        if allowed_statuses and status not in allowed_statuses:
+            allowed_text = "、".join(sorted(allowed_statuses))
+            raise ValueError(f"{device['name']} 不支持状态 {status}，可用状态：{allowed_text}。")
         now = utc_now()
         self.db.execute(
             "UPDATE devices SET status = ?, updated_at = ? WHERE id = ?",
@@ -133,6 +169,9 @@ class SmartHomeService:
 
     def simulate_alert(self, user: dict[str, Any], event_type: str, room_id: int) -> dict[str, Any]:
         self.auth.require(user, {"admin", "member"})
+        event_type = (event_type or "").strip()
+        if event_type not in ALERT_EVENT_TYPES:
+            raise ValueError("告警事件类型不支持。")
         room = self.db.query_one("SELECT * FROM rooms WHERE id = ?", (room_id,))
         if not room:
             raise ValueError("房间不存在。")
@@ -232,29 +271,151 @@ class SmartHomeService:
         if not command:
             raise ValueError("语音指令不能为空。")
 
+        if self.deepseek_store.load().has_api_key:
+            try:
+                intent = self.deepseek.parse_voice_command(
+                    command=command,
+                    rooms=self.rooms(),
+                    devices=self.devices(),
+                    scenes=self.scenes(),
+                    status_options=DEVICE_STATUS_OPTIONS,
+                    event_types=ALERT_EVENT_TYPES,
+                )
+                return self._execute_deepseek_intent(user, command, intent)
+            except ValueError as exc:
+                try:
+                    result = self._handle_rule_voice_command(user, command)
+                except ValueError as rule_exc:
+                    raise ValueError(f"DeepSeek 未能解析该指令：{exc}") from rule_exc
+                result["source"] = "local"
+                result["llm_error"] = str(exc)
+                result["message"] = f"{result['message']}（DeepSeek 未完成解析，已使用本地规则。）"
+                return result
+
+        return self._handle_rule_voice_command(user, command)
+
+    def _handle_rule_voice_command(self, user: dict[str, Any], command: str) -> dict[str, Any]:
         scene = self._scene_from_command(command)
         if scene:
             updated = self.activate_scene(user, scene["id"])
-            return {"type": "scene", "message": f"已启动{updated['name']}。", "scene": updated}
+            return {"type": "scene", "message": f"已启动{updated['name']}。", "scene": updated, "source": "local"}
 
         alert_event = self._event_from_command(command)
         if alert_event:
             room_id = self._room_from_command(command) or 1
             alert = self.simulate_alert(user, alert_event, room_id)
-            return {"type": "alert", "message": alert["message"], "alert": alert}
+            return {"type": "alert", "message": alert["message"], "alert": alert, "source": "local"}
 
         camera = self._camera_query_from_command(command)
         if camera:
             self.log(user, "voice_query_camera", "device", camera["id"], command)
-            return {"type": "camera", "message": f"正在查看{camera['name']}。", "device": camera}
+            return {"type": "camera", "message": f"正在查看{camera['name']}。", "device": camera, "source": "local"}
 
         device_match = self._device_from_command(command)
         if device_match:
             status = self._status_from_command(command, device_match["type"])
             device = self.set_device_status(user, device_match["id"], status)
-            return {"type": "device", "message": f"{device['name']} 已切换为 {device['status']}。", "device": device}
+            return {"type": "device", "message": f"{device['name']} 已切换为 {device['status']}。", "device": device, "source": "local"}
 
         raise ValueError("未能识别该语音指令，请尝试：打开客厅灯、启动离家安防、模拟厨房烟雾。")
+
+    def _execute_deepseek_intent(
+        self,
+        user: dict[str, Any],
+        command: str,
+        intent: dict[str, Any],
+    ) -> dict[str, Any]:
+        action = str(intent.get("action") or "none").strip()
+        reply = str(intent.get("reply") or "").strip()
+
+        if action == "set_device":
+            device_id = self._intent_int(intent, "device_id")
+            status = str(intent.get("status") or "").strip()
+            if device_id is None or not status:
+                raise ValueError("DeepSeek 返回的设备控制指令缺少 device_id 或 status。")
+            device = self.set_device_status(user, device_id, status)
+            return {
+                "type": "device",
+                "message": reply or f"{device['name']} 已切换为 {device['status']}。",
+                "device": device,
+                "source": "deepseek",
+            }
+
+        if action == "activate_scene":
+            scene_id = self._intent_int(intent, "scene_id")
+            if scene_id is None:
+                raise ValueError("DeepSeek 返回的场景指令缺少 scene_id。")
+            scene = self.activate_scene(user, scene_id)
+            return {
+                "type": "scene",
+                "message": reply or f"已启动{scene['name']}。",
+                "scene": scene,
+                "source": "deepseek",
+            }
+
+        if action == "simulate_alert":
+            room_id = self._intent_int(intent, "room_id") or self._room_from_command(command) or 1
+            event_type = str(intent.get("event_type") or "").strip()
+            if event_type not in ALERT_EVENT_TYPES:
+                raise ValueError("DeepSeek 返回的告警事件类型不支持。")
+            alert = self.simulate_alert(user, event_type, room_id)
+            return {
+                "type": "alert",
+                "message": reply or alert["message"],
+                "alert": alert,
+                "source": "deepseek",
+            }
+
+        if action == "query_camera":
+            device_id = self._intent_int(intent, "device_id")
+            if device_id is None:
+                raise ValueError("DeepSeek 返回的摄像头查询指令缺少 device_id。")
+            camera = self.device(device_id)
+            if camera["type"] != "camera":
+                raise ValueError("DeepSeek 返回的摄像头设备类型不正确。")
+            self.log(user, "deepseek_query_camera", "device", camera["id"], command)
+            return {
+                "type": "camera",
+                "message": reply or f"正在查看{camera['name']}。",
+                "device": camera,
+                "source": "deepseek",
+            }
+
+        raise ValueError(reply or "DeepSeek 未识别出可执行的智能家居指令。")
+
+    @staticmethod
+    def _intent_int(intent: dict[str, Any], key: str) -> int | None:
+        value = intent.get(key)
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"DeepSeek 返回的 {key} 不是有效数字。") from exc
+
+    def deepseek_config(self, user: dict[str, Any]) -> dict[str, Any]:
+        self.auth.require(user, {"admin", "member", "guest"})
+        return self.deepseek_store.summary()
+
+    def save_deepseek_config(
+        self,
+        user: dict[str, Any],
+        api_key: str,
+        base_url: str | None = None,
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        self.auth.require(user, {"admin", "member"})
+        if not (api_key or "").strip():
+            raise ValueError("DeepSeek API 密钥不能为空。")
+        self.deepseek_store.save(api_key, base_url=base_url, model=model)
+        self.log(user, "save_deepseek_config", "system", None, "保存 DeepSeek API 密钥。")
+        return self.deepseek_config(user)
+
+    def test_deepseek_connection(self, user: dict[str, Any]) -> dict[str, Any]:
+        self.auth.require(user, {"admin", "member"})
+        result = self.deepseek.test_connection()
+        self.log(user, "test_deepseek_connection", "system", None, result["message"])
+        return result
 
     def logs(self, limit: int = 50) -> list[dict[str, Any]]:
         return self.db.query_all(
@@ -375,13 +536,21 @@ class SmartHomeService:
 
     @staticmethod
     def _status_from_command(command: str, device_type: str) -> str:
-        if any(word in command for word in ["关闭", "关掉", "停止"]):
-            if device_type == "lock":
+        if device_type == "lock":
+            if any(word in command for word in ["解锁", "开锁", "打开", "开启"]):
                 return "unlocked"
+            if any(word in command for word in ["上锁", "锁上", "关闭", "关上", "布防", "启动"]):
+                return "locked"
+            return "locked"
+        if any(word in command for word in ["关闭", "关掉", "停止"]):
+            if device_type == "camera":
+                return "privacy"
+            if device_type == "alarm":
+                return "standby"
+            if device_type == "sensor":
+                return "normal"
             return "off" if device_type in {"light", "climate"} else "standby"
         if any(word in command for word in ["打开", "开启", "启动"]):
-            if device_type == "lock":
-                return "locked"
             if device_type == "climate":
                 return "cooling"
             if device_type == "camera":
